@@ -11,7 +11,7 @@ something else.
 | Skill | Invoke | Role |
 |-------|--------|------|
 | `cursor-setup` | `/cursor-delegate:cursor-setup` | **Get ready.** Detects the OS, checks every dependency + auth in one pass (no Cursor tokens spent), and wires the read-only permission allowlist. Run once per machine. |
-| `cursor` | `/cursor-delegate:cursor` | **Do the work.** Dispatch implement / review / plan / investigate / security tasks to Cursor — single jobs, parallel `fanout`, `resume` / `status` / `cancel`, per-task `preamble`. |
+| `cursor` | `/cursor-delegate:cursor` | **Do the work.** Dispatch implement / review / plan / investigate / security tasks to Cursor — single jobs, parallel `fanout`, `resume` / `status` / `cancel`, per-task `preamble`. How to run see [`cursor/README.md`](plugins/cursor-delegate/skills/cursor/README.md).
 
 The two are one unit: `cursor-setup` drives the same engine `cursor` uses
 (`lib/setup.sh`), and both resolve to `${CLAUDE_PLUGIN_ROOT}/skills/cursor/…` at
@@ -70,6 +70,65 @@ runtime — so setup and delegation always agree on paths, models, and permissio
 ```
 
 Reload after editing the plugin: `/reload-plugins`.
+
+## Choosing a model (`.cursor.json`)
+
+Every task type routes to a `model`, resolved from `.cursor.json`. The shipped
+default is **`auto`** — Cursor picks a model server-side — so nothing needs
+configuring to get started. To pin a specific model, set `model` in any config
+layer.
+
+**Model names come from `agent --list-models`.** Each line is printed as
+`<name> - <description>`; the **token to the left of ` - ` is the model name** —
+that leading prefix is what you reference in `.cursor.json`. Copy it verbatim:
+
+```
+$ agent --list-models
+Available models
+
+auto - Auto (current)
+gpt-5.3-codex - Codex 5.3
+gpt-5.3-codex-high - Codex 5.3 High
+claude-opus-4-8-thinking-high - Opus 4.8 1M Thinking
+composer-2.5 - Composer 2.5
+…
+```
+
+| `agent --list-models` line | `"model"` value to use |
+|----------------------------|------------------------|
+| `auto - Auto (current)`                              | `"auto"`                          |
+| `gpt-5.3-codex-high - Codex 5.3 High`                | `"gpt-5.3-codex-high"`            |
+| `claude-opus-4-8-thinking-high - Opus 4.8 1M Thinking` | `"claude-opus-4-8-thinking-high"` |
+
+Set it per task type, in whichever layer matches the scope you want:
+
+```jsonc
+// <repo>/.cursor.json — pin review + security for this project only
+{
+  "defaults": {
+    "review":   { "model": "gpt-5.3-codex-high" },
+    "security": { "model": "claude-opus-4-8-thinking-high" }
+  }
+}
+```
+
+Precedence is **deep-merged, last wins** across three layers:
+
+1. `${CLAUDE_PLUGIN_ROOT}/skills/cursor/config/.cursor.json` — skill default
+2. `~/.cursor.json` — user override (applies everywhere)
+3. `<cwd>/.cursor.json` — project override (commit it to share with the repo)
+
+Because the merge is per-leaf, a `<repo>/.cursor.json` that only sets
+`review.model` keeps every other field (`mode`, `preamble`, `sandbox`, …) from
+the layers beneath it.
+
+**Validation.** The resolved model is matched against `agent --list-models` at
+launch, anchored to the line-start token (so `composer-2` won't match
+`composer-2.5`). An unknown name fails fast with `exit 3` and prints the
+available list — nothing is dispatched to Cursor, so a typo never spends a token.
+
+Full schema, routing defaults, and the `auto` mechanics live in
+[`skills/cursor/references/configuration.md`](plugins/cursor-delegate/skills/cursor/references/configuration.md).
 
 ## Layout
 
