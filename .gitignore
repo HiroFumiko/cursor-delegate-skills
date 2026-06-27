@@ -1,0 +1,8 @@
+# oh-my-claudecode runtime state (operational artifacts, not source)
+.omc/
+
+# codegraph index (operational artifact, not source)
+.codegraph/
+
+# macOS
+.DS_Store
