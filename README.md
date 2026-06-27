@@ -1,5 +1,7 @@
 # cursor-delegate
 
+> 日本語版: [README_ja.md](./README_ja.md)
+
 A Claude Code plugin for offloading coding work to the **Cursor CLI** (`agent`).
 It bundles two cooperating skills — one to **prepare** the environment, one to
 **run** the delegations — so you can hand review / audit / planning /
