@@ -110,4 +110,75 @@ else
   fail "apply backup" "no .cursor-setup.bak"
 fi
 
+# ---- Test 6: --init-config user writes a MINIMAL override scaffold ----
+# Minimal scaffold = {"version":1,"defaults":{}}: valid JSON, empty defaults so
+# it is a no-op on the deep-merge (the skill default fully applies).
+ICFG_HOME="${TMPDIR_TEST}/home_initcfg"
+mkdir -p "${ICFG_HOME}"
+set +e
+OUT_IC="$(run_setup "${ICFG_HOME}" --init-config user)"; RC_IC=$?
+set -e
+USER_CFG="${ICFG_HOME}/.cursor.json"
+if [[ ${RC_IC} -eq 0 ]] \
+  && printf '%s' "${OUT_IC}" | grep -q "WROTE" \
+  && [[ -f "${USER_CFG}" ]] \
+  && jq -e '.version == 1 and (.defaults | length == 0)' "${USER_CFG}" >/dev/null 2>&1; then
+  pass "init-config user: wrote minimal override scaffold ~/.cursor.json (WROTE)"
+else
+  fail "init-config user" "rc=${RC_IC} out=$(printf '%s' "${OUT_IC}" | tail -1)"
+fi
+
+# ---- Test 7: re-run without --force does NOT clobber (EXISTS, content intact) ----
+printf '{"version":1,"defaults":{"sentinel":true}}' >"${USER_CFG}"   # mark the file
+set +e
+OUT_NOCLOB="$(run_setup "${ICFG_HOME}" --init-config user)"; RC_NOCLOB=$?
+set -e
+if [[ ${RC_NOCLOB} -eq 0 ]] \
+  && printf '%s' "${OUT_NOCLOB}" | grep -q "EXISTS" \
+  && jq -e '.defaults.sentinel == true' "${USER_CFG}" >/dev/null 2>&1; then
+  pass "init-config: existing file preserved without --force (EXISTS)"
+else
+  fail "init-config no-clobber" "rc=${RC_NOCLOB} out=$(printf '%s' "${OUT_NOCLOB}" | tail -1)"
+fi
+
+# ---- Test 8: --force overwrites + backs up the prior file ----
+set +e
+OUT_FORCE="$(run_setup "${ICFG_HOME}" --init-config user --force)"; RC_FORCE=$?
+set -e
+if [[ ${RC_FORCE} -eq 0 ]] \
+  && printf '%s' "${OUT_FORCE}" | grep -q "WROTE" \
+  && [[ -f "${USER_CFG}.cursor-setup.bak" ]] \
+  && jq -e '.defaults.sentinel == true' "${USER_CFG}.cursor-setup.bak" >/dev/null 2>&1 \
+  && jq -e '.version == 1 and (.defaults | length == 0)' "${USER_CFG}" >/dev/null 2>&1; then
+  pass "init-config --force: overwrote with scaffold + backed up prior file"
+else
+  fail "init-config --force" "rc=${RC_FORCE} out=$(printf '%s' "${OUT_FORCE}" | tail -1)"
+fi
+
+# ---- Test 9: project scope writes <cwd>/.cursor.json ----
+PROJ_DIR="${TMPDIR_TEST}/proj"
+mkdir -p "${PROJ_DIR}"
+set +e
+OUT_PROJ="$( cd "${PROJ_DIR}" && env -u CURSOR_API_KEY HOME="${ICFG_HOME}" PATH="${FAKE_BIN}:${PATH}" \
+  bash "${SETUP_SH}" --init-config project 2>&1 )"; RC_PROJ=$?
+set -e
+if [[ ${RC_PROJ} -eq 0 ]] \
+  && printf '%s' "${OUT_PROJ}" | grep -q "WROTE" \
+  && [[ -f "${PROJ_DIR}/.cursor.json" ]]; then
+  pass "init-config project: wrote <cwd>/.cursor.json"
+else
+  fail "init-config project" "rc=${RC_PROJ} out=$(printf '%s' "${OUT_PROJ}" | tail -1)"
+fi
+
+# ---- Test 10: missing / bad scope is a usage error (exit 64) ----
+set +e
+run_setup "${ICFG_HOME}" --init-config >/dev/null 2>&1; RC_NOSCOPE=$?
+run_setup "${ICFG_HOME}" --init-config bogus >/dev/null 2>&1; RC_BADSCOPE=$?
+set -e
+if [[ ${RC_NOSCOPE} -eq 64 && ${RC_BADSCOPE} -eq 64 ]]; then
+  pass "init-config: missing/bad scope -> exit 64"
+else
+  fail "init-config scope guard" "noscope=${RC_NOSCOPE} badscope=${RC_BADSCOPE}"
+fi
+
 fx_summary "test_setup_doctor.sh"

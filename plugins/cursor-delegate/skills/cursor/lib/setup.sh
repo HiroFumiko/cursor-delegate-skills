@@ -13,9 +13,14 @@
 # Therefore: no ${var^^}, no `wait -n`, no associative arrays, no mapfile.
 #
 # Contract:
-#   bash setup.sh [--check]              full doctor report + verdict (default)
-#   bash setup.sh --print-permissions    print the settings.json allow entries
-#   bash setup.sh --apply-permissions    merge allow entries into settings.json
+#   bash setup.sh [--check]                    full doctor report + verdict (default)
+#   bash setup.sh --print-permissions          print the settings.json allow entries
+#   bash setup.sh --apply-permissions          merge allow entries into settings.json
+#   bash setup.sh --init-config <scope> [--force]
+#                                              scaffold a minimal override
+#                                              .cursor.json at user scope
+#                                              (~/.cursor.json) or project scope
+#                                              (<cwd>/.cursor.json)
 #   bash setup.sh --help
 #
 # Exit codes:
@@ -40,7 +45,8 @@ SETTINGS_JSON="${HOME}/.claude/settings.json"
 
 usage() {
   cat >&2 <<'EOF'
-Usage: /cursor-setup [--check | --print-permissions | --apply-permissions]
+Usage: /cursor-setup [--check | --print-permissions | --apply-permissions
+                      | --init-config <user|project> [--force]]
 
   (default)            Run the readiness doctor: detect OS, check every
   --check              dependency, and print a verdict + per-OS fix-it steps.
@@ -52,6 +58,18 @@ Usage: /cursor-setup [--check | --print-permissions | --apply-permissions]
                        cancel / resume are deliberately omitted (still prompt).
   --apply-permissions  Merge those entries into ~/.claude/settings.json
                        (backs up to settings.json.cursor-setup.bak first).
+  --init-config <scope> [--force]
+                       Scaffold a MINIMAL override .cursor.json ({"version":1,
+                       "defaults":{}}) at:
+                         user     -> ~/.cursor.json      (every repo, this user)
+                         project  -> <cwd>/.cursor.json  (this repo; committable)
+                       Empty defaults is a no-op on the deep-merge, so the skill
+                       default applies until you add a diff — and fields you don't
+                       override keep receiving skill-default updates (marketplace
+                       overwrites layer 1, never these override files). Never
+                       overwrites an existing file unless --force (prior file
+                       backed up to <target>.cursor-setup.bak). Prints
+                       "WROTE\t<path>" or "EXISTS\t<path>" to stdout.
   --help               This help.
 EOF
 }
@@ -305,6 +323,72 @@ apply_permissions() {
 }
 
 # ------------------------------------------------------------------------------
+# Override scaffold (--init-config).
+#
+# Writes a MINIMAL override `.cursor.json` ({"version":1,"defaults":{}}) at user
+# scope (~/.cursor.json) or project scope (<cwd>/.cursor.json). An empty
+# `defaults` is a no-op on the deep-merge, so the skill default (layer 1) fully
+# applies until the user adds a diff. This is deliberately NOT a copy of the
+# skill default: marketplace updates overwrite layer 1 but never these override
+# files, and a full copy would shadow every future skill-default improvement.
+# A minimal scaffold gives the user a marketplace-safe place to record only the
+# fields they want to change, while untouched fields keep tracking the default.
+#
+# Safety: never clobbers an existing file unless --force; with --force the prior
+# file is backed up to <target>.cursor-setup.bak first. Emits a machine-readable
+# "WROTE\t<path>" or "EXISTS\t<path>" line to stdout so the caller knows the
+# outcome without reparsing logs.
+# ------------------------------------------------------------------------------
+
+init_config() {
+  local scope="${1:-}"
+  local force="${2:-0}"
+  local target
+
+  case "${scope}" in
+    user)    target="${HOME}/.cursor.json" ;;
+    project) target="${PWD}/.cursor.json" ;;
+    *)
+      cd_log "ERROR" "--init-config needs a scope: 'user' (~/.cursor.json) or 'project' (<cwd>/.cursor.json)"
+      exit 64
+      ;;
+  esac
+
+  # user and project scope collapse to the same file when cwd is $HOME.
+  if [[ "${scope}" == "project" && "${PWD}" == "${HOME}" ]]; then
+    cd_log "WARN" "cwd is your home directory — project scope == user scope (both ${target})"
+  fi
+
+  if [[ -e "${target}" && "${force}" != "1" ]]; then
+    cd_log "WARN" "config already exists: ${target}"
+    cd_log "WARN" "re-run with --force to overwrite (the existing file is backed up first)"
+    printf 'EXISTS\t%s\n' "${target}"
+    return 0
+  fi
+
+  if [[ -e "${target}" ]]; then
+    cp "${target}" "${target}.cursor-setup.bak"
+    cd_log "INFO" "backed up existing config to ${target}.cursor-setup.bak"
+  fi
+
+  # Minimal override scaffold. Static literal (no jq needed) — empty `defaults`
+  # merges as a no-op over the skill default.
+  cat >"${target}.tmp" <<'EOF'
+{
+  "version": 1,
+  "defaults": {}
+}
+EOF
+  mv "${target}.tmp" "${target}"
+  chmod 644 "${target}" 2>/dev/null || true   # no secrets ever live here; keep it readable/committable
+  cd_log "INFO" "wrote ${scope}-scope override scaffold: ${target}"
+  cd_log "INFO" "add ONLY the fields you want to change (e.g. a task's model/mode/preamble);"
+  cd_log "INFO" "untouched fields fall back to — and keep receiving updates from — the skill default."
+  cd_log "INFO" "schema + examples: skills/cursor/references/configuration.md"
+  printf 'WROTE\t%s\n' "${target}"
+}
+
+# ------------------------------------------------------------------------------
 # Doctor report.
 # ------------------------------------------------------------------------------
 
@@ -362,10 +446,29 @@ run_check() {
 # ------------------------------------------------------------------------------
 
 MODE="check"
+INIT_SCOPE=""
+INIT_FORCE=0
 case "${1:-}" in
   ""|--check)          MODE="check" ;;
   --print-permissions) MODE="print" ;;
   --apply-permissions) MODE="apply" ;;
+  --init-config)
+    MODE="init"
+    shift
+    INIT_SCOPE="${1:-}"
+    [[ $# -gt 0 ]] && shift   # consume the scope token (if present)
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --force) INIT_FORCE=1 ;;
+        *)
+          cd_log "ERROR" "unknown argument for --init-config: $1"
+          usage
+          exit 64
+          ;;
+      esac
+      shift
+    done
+    ;;
   -h|--help)           usage; exit 0 ;;
   *)
     cd_log "ERROR" "unknown argument: $1"
@@ -378,4 +481,5 @@ case "${MODE}" in
   check) run_check ;;            # exit code from run_check (0 ready / 1 needs setup)
   print) print_permissions ;;
   apply) apply_permissions ;;
+  init)  init_config "${INIT_SCOPE}" "${INIT_FORCE}" ;;
 esac

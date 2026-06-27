@@ -41,8 +41,9 @@ Subcommands:
   status   [--last N] [--since <d>] [--with-pid]
                                                List recent jobs (default 24h)
   cancel   <JOB_ID>                            SIGTERM -> (5s) -> SIGKILL
-  setup    [--print-permissions|--apply-permissions]
-                                               Cross-platform readiness doctor
+  setup    [--print-permissions|--apply-permissions|--init-config <user|project>]
+                                               Cross-platform readiness doctor +
+                                               minimal .cursor.json override scaffold
                                                (alias: doctor). See /cursor-setup.
 
 Task-type shortcuts (omit `dispatch`):
