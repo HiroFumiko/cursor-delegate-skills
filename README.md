@@ -71,19 +71,6 @@ runtime — so setup and delegation always agree on paths, models, and permissio
 
 Reload after editing the plugin: `/reload-plugins`.
 
-## Publishing to GitHub
-
-1. `cd <repo-root> && git init && git add . && git commit -m "cursor-delegate plugin"`
-2. Push to a GitHub repository.
-3. Add `repository` / `homepage` URLs to `.claude-plugin/marketplace.json` and
-   `plugins/cursor-delegate/.claude-plugin/plugin.json`.
-4. **Add a `LICENSE` file** — none is bundled; the license is yours to choose.
-5. Users then install with:
-   ```
-   /plugin marketplace add <github-user>/<repo>
-   /plugin install cursor-delegate@cursor-delegate
-   ```
-
 ## Layout
 
 ```

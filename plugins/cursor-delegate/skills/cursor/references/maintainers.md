@@ -47,6 +47,40 @@ session or real `~/.cursor/hooks.json`:
 | MQ-4: Hooks quarantine live round-trip | R2 |
 | MQ-5: Local-parallel auto-detect flip | AC2 / R4 |
 
+## Branch model & publishing to `main`
+
+`develop` is the source of truth and holds **everything** (tests, dev docs,
+tooling). `main` is the **distribution branch** users install from
+(`/plugin marketplace add HiroFumiko/cursor-delegate-skills`) and must stay
+clean — no tests, no maintainer-only files.
+
+`.gitignore` cannot do this: it only affects *untracked* files, so a file once
+committed on `develop` cannot be auto-ignored on `main`. Instead, `main` is
+**regenerated as a snapshot** of `develop` minus an explicit exclude list:
+
+```bash
+scripts/publish-main.sh            # rebuild main locally from develop
+scripts/publish-main.sh --push     # ...and push main to origin
+```
+
+The script loads `develop`'s committed tree into a throwaway index, strips the
+excluded paths, and commits the result onto `main` — your working tree is never
+touched, and there are no merge conflicts to resolve.
+
+**Excluded from `main`** (edit the `EXCLUDES` array in `scripts/publish-main.sh`
+to change): `…/tests/**`, `…/TODO.md`, this `maintainers.md`, and `scripts/`
+itself.
+
+Typical release flow:
+
+```bash
+git switch develop && git push origin develop   # land work on develop first
+scripts/publish-main.sh --push                   # publish a clean main snapshot
+```
+
+> Note: the script reads the **committed** tree of `develop`, so commit your
+> changes before publishing — uncommitted edits are not included.
+
 ## Plan-done definition (v1.0.0)
 
 The skill is considered **done** when:
