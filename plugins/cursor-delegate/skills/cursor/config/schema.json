@@ -1,0 +1,55 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "cursor skill .cursor.json",
+  "description": "Routing config for the cursor skill (config/.cursor.json default; ~/.cursor.json and <cwd>/.cursor.json overrides). See README.md § CONFIGURATION.",
+  "type": "object",
+  "required": ["version", "defaults"],
+  "additionalProperties": false,
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "defaults": {
+      "type": "object",
+      "required": ["implement", "review", "plan", "investigate", "security"],
+      "additionalProperties": false,
+      "properties": {
+        "implement":   { "$ref": "#/$defs/taskRoute" },
+        "review":      { "$ref": "#/$defs/taskRoute" },
+        "plan":        { "$ref": "#/$defs/taskRoute" },
+        "investigate": { "$ref": "#/$defs/taskRoute" },
+        "security":    { "$ref": "#/$defs/taskRoute" }
+      }
+    },
+    "retry": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "max_attempts":     { "type": "integer", "minimum": 1, "maximum": 10 },
+        "initial_delay_ms": { "type": "integer", "minimum": 0 },
+        "backoff":          { "type": "string", "enum": ["exponential", "linear"] }
+      }
+    },
+    "timeout_sec": { "type": "integer", "minimum": 1, "maximum": 600 },
+    "max_fanout":  { "type": "integer", "minimum": 1, "maximum": 16 }
+  },
+  "$defs": {
+    "taskRoute": {
+      "type": "object",
+      "required": ["model"],
+      "additionalProperties": false,
+      "properties": {
+        "model":    { "type": "string", "pattern": "^[A-Za-z0-9._:/-]+$" },
+        "mode":     { "type": "string", "enum": ["ask", "plan", "agent", "edit"] },
+        "force":    { "type": "boolean" },
+        "worktree": { "type": "boolean" },
+        "sandbox":  { "type": "string", "enum": ["enabled", "disabled"] },
+        "preamble": {
+          "description": "Optional per-task prompt prepended to the user prompt. String, or array of strings joined with newlines. A {{prompt}} placeholder, if present, marks where the user prompt is inserted; otherwise the preamble is prepended with a separator.",
+          "oneOf": [
+            { "type": "string" },
+            { "type": "array", "items": { "type": "string" } }
+          ]
+        }
+      }
+    }
+  }
+}
