@@ -46,13 +46,13 @@ CHAT_ID=$(/cursor resume --create-chat)
 ## 前提条件と環境構築
 
 このスキルは純粋な Bash 実装で、外部バイナリ 4 つに依存します:
-`bash`(4 系以上)、`jq`、`timeout(1)`、`agent`(Cursor CLI)。
+`bash`(macOS stock の **3.2** を含む)、`jq`、`timeout(1)`、`agent`(Cursor CLI)。
 
 ### 必須バイナリ
 
 | バイナリ  | 用途                                              | 不在時の挙動           |
 |-----------|---------------------------------------------------|------------------------|
-| `bash`    | `lib/*.sh` の実行(配列のため Bash 4+ 必須)      | n/a (インタプリタ)     |
+| `bash`    | `lib/*.sh` の実行(macOS stock **3.2 で動作**。4.3+ は `fanout --local-parallel` の高速化のみ) | n/a (インタプリタ) |
 | `jq`      | Cursor JSON 解析、設定マージ、meta ファイル生成   | exit 2 + インストール案内 |
 | `timeout` | `agent` 呼び出しを 590 秒のハードタイムアウトで包む | exit 2 + インストール案内 |
 | `agent`   | Cursor CLI 本体                                   | exit 2 + インストール案内 |
@@ -90,14 +90,16 @@ curl https://cursor.com/install -fsS | bash
 #### macOS
 
 macOS には **BSD coreutils** しか同梱されておらず、**`timeout(1)` が
-存在しません**。また、システムの `bash` はライセンス事情で v3.2 のままです。
-GNU 版を Homebrew で入れます:
+存在しません**。システムの `bash` はライセンス事情で v3.2 のままですが、
+スキルはその **stock の bash 3.2 のまま動作** します — 実際に足りないのは
+`timeout` だけなので GNU coreutils を入れます(bash の更新は任意):
 
 ```bash
 # 1. GNU coreutils(`timeout`、`realpath` 等が入る)
 brew install coreutils
 
-# 2. 新しい Bash(任意だが推奨)
+# 2. 新しい Bash — 任意: fanout --local-parallel のポーリングを
+#    より速い `wait -n` に置き換えるだけ。stock bash 3.2 のままでも動作します。
 brew install bash
 
 # 3. jq
@@ -129,35 +131,35 @@ which timeout && timeout --version | head -1
 #### Windows
 
 Claude Code 自体は Windows ネイティブで動きますが、**このスキルは POSIX
-シェルを必要とします**。サポートする 2 経路:
+シェルと Unix coreutils を必要とするため、ネイティブ Windows は非サポート**
+です — WSL を使ってください。
 
-**推奨 — WSL2(Ubuntu / Debian)。** WSL ディストロを Linux マシンとして
-扱い、Linux の手順をそのまま適用してください。Claude Code を WSL 内から
-起動すれば、`~/.claude/skills/cursor/` が正しく解決されます。Linux 版
-Cursor CLI は WSL 内で素直にインストール可能です。
-
-**代替 — Git Bash(MSYS2)。** 動作はしますが注意点あり:
+**サポートされる経路は WSL2(Ubuntu / Debian)です。** WSL ディストロを
+Linux マシンとして扱い、Linux の手順をそのまま適用してください。Claude Code
+を WSL 内から起動すれば `~/.claude/skills/cursor/` が正しく解決されます。
+Linux 版 Cursor CLI は WSL 内で素直にインストールできます。
 
 ```bash
-# Git Bash 内で
-pacman -S jq coreutils    # MSYS2 pacman を使う場合
-# または https://jqlang.github.io/jq/download/ から jq.exe を落として
-# PATH 上に配置
-
-# Cursor CLI for Windows — インストーラに `cursor-agent.exe` が同梱
-# `agent` で解決できるようエイリアス:
-alias agent="cursor-agent"
+# 管理者 PowerShell で:
+wsl --install -d Ubuntu
+# 再起動し Ubuntu を開いたら、WSL の中で:
+sudo apt-get update && sudo apt-get install -y jq coreutils
+curl https://cursor.com/install -fsS | bash
+agent login
 ```
 
-**Windows 固有の注意点:**
-- NTFS 上のファイルモードビット(実行ビット、sentinel ファイル)の挙動が
-  Linux と異なります。スキルはユーザの umask で書き込むので、共有 PC では
-  `umask 077` を明示すると安全です。
+> **Git Bash / Cygwin は公式にはサポートしていません。** 部分的に動く可能性は
+> ありますが、パス処理・ファイルモードビット・`timeout` ラップは未検証です。
+> WSL を使ってください。
+
+**WSL で動かす際の注意点:**
 - `~/.cursor/worktrees/<repo>/impl-*/` は WSL 内では `/` 区切りですが、
   Windows 側ツールから見ると `\\wsl$\...` 表記になります。
   `implement` の diff レビューは WSL か Cursor 本体の中で完結させてください。
 - `timeout 590s` でラップしているため、これより短いアイドルタイムアウトを
   かける Windows ターミナル(一部の企業設定)からは実行しないこと。
+- 共有ワークステーションでは `umask 077` を明示すると、スキルが書き出す
+  ファイルのモードビットを締められます。
 
 ### セットアップ後の確認
 
@@ -403,6 +405,7 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 | `CURSOR_DELEGATE_DRY_RUN`         | `1` で `agent` 呼び出しをスキップし `status=dry_run` サマリを出力(`--dry-run` と同等。debug も含意)。 |
 | `CURSOR_DELEGATE_DEBUG_PROMPT`    | `1` で dry-run サマリにプロンプト先頭 200 バイトのプレビューを追加(既定オフ。プロンプトは機微情報を含み得るため)。 |
 | `CURSOR_DELEGATE_ALLOW_SYMLINK_STATE`| `1` で `.cursor` / delegate / state がシンボリックリンクであることを許容(既定 `0` で V6 が拒否)。tmpfs リダイレクト用途。 |
+| `CURSOR_DELEGATE_SKIP_SANDBOX_CHECK`  | `1` で `~/.cursor` の書き込み可否 pre-flight をスキップ(別手段で書き込み可を保証済みの場合、例: CI バインドマウント)。既定 `0`。 |
 | `CURSOR_DELEGATE_LOCAL_PARALLEL`  | `1` で `fanout --local-parallel` を強制。 |
 | `CURSOR_DELEGATE_FORCE_CLAUDE`    | `1` で auto-flip(local-parallel)を抑止。 |
 | `CURSOR_DELEGATE_FANOUT_MODE`     | 内部用 — local-parallel 時に直列化フラグ書き込みをスキップ。 |
@@ -494,10 +497,12 @@ state:
 
 **リトライ判定**(`cd_classify_exit`):
 - `SUCCESS`(0) — 完了
-- `PERMANENT`(124, 2, 3, 130, 137 + 明示的な拒否マーカ)— リトライ禁止
-- `TRANSIENT`(ネットワークタイムアウト/レートリミットマーカ)—
-  指数バックオフ(1s → 2s → 4s)、`retry.max_attempts`(既定 3)まで
-- `UNKNOWN`(その他全部)— PERMANENT 扱い(fail-fast)
+- `TRANSIENT`(明示ホワイトリスト `7 / 28 / 52` = curl 接続/タイムアウト/
+  空応答、`429` = レートリミット)— 指数バックオフ(1s → 2s → 4s)、
+  `retry.max_attempts`(既定 3)まで
+- `PERMANENT`(`2` バイナリ/認証、`3` モデル、`4` 設定、`124` タイムアウト、
+  `125`、`126`、`127`、`130`、`137`、`143`)— リトライ禁止
+- `UNKNOWN`(その他全部)— PERMANENT 扱い(default-deny / fail-fast)
 
 **ログ**: 全サブコマンドは `cd_log LEVEL "message"`(LEVEL ∈
 `INFO | WARN | ERROR`)で stderr に出力。stdout は上記の契約専用。
@@ -585,10 +590,11 @@ bash ~/.claude/skills/cursor/tests/run.sh unit
 Phase 4 検証項目(A1, V1–V12, F6–F8)は 2026-04-28 時点で全件解決済み。
 各項目の詳細は `TODO.md` を参照。
 
-**`--local-parallel` には Bash 4.3+ が必須**: セマフォが `wait -n` を使用。
-古い bash では明確なエラーとアップグレード案内が表示されます
-(macOS: `brew install bash`、Git Bash: Git for Windows 更新、WSL2:
-`sudo apt install bash`)。
+**`--local-parallel` は bash 3.2+ で動作**: セマフォは `wait -n`(bash 4.3+)
+を優先し、古い bash では **ポーリングループにフォールバック** します。
+したがって macOS stock の `/bin/bash`(3.2)でもアップグレード不要で動きます。
+`brew install bash` は任意で、ポーリングをイベント駆動の `wait -n` に
+置き換えるだけです(どちらの経路を取ったかはログに出ます)。
 
 ### 上流 / 環境依存の注意
 

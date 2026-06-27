@@ -44,13 +44,14 @@ CHAT_ID=$(/cursor resume --create-chat)
 ## Prerequisites & environment setup
 
 The skill is pure Bash. It shells out to four external binaries:
-`bash` (≥ 4), `jq`, `timeout(1)`, and `agent` (Cursor CLI).
+`bash` (macOS stock **3.2** is supported), `jq`, `timeout(1)`, and `agent`
+(Cursor CLI).
 
 ### Required binaries
 
 | Binary    | Purpose                                            | Pre-flight error if missing |
 |-----------|----------------------------------------------------|-----------------------------|
-| `bash`    | All `lib/*.sh` scripts — needs Bash 4+ for arrays  | n/a (interpreter)           |
+| `bash`    | All `lib/*.sh` scripts — macOS stock **3.2 works**; 4.3+ only speeds up `fanout --local-parallel` | n/a (interpreter) |
 | `jq`      | Parse Cursor JSON, merge config, write meta files  | exit 2 with install hint    |
 | `timeout` | Wrap every `agent` call in a 590 s hard timeout    | exit 2 with install hint    |
 | `agent`   | The Cursor CLI itself                              | exit 2 with install hint    |
@@ -88,13 +89,16 @@ curl https://cursor.com/install -fsS | bash
 #### macOS
 
 macOS bundles **BSD coreutils**, which **does not include `timeout(1)`**, and
-its `bash` is stuck at v3.2 (license reasons). Install GNU equivalents:
+its `bash` is stuck at v3.2 (license reasons). The skill runs on that stock
+**bash 3.2 as-is** — only `timeout` is genuinely missing, so install GNU
+coreutils (updating bash is optional):
 
 ```bash
 # 1. GNU coreutils (gives you `timeout`, `realpath`, etc.)
 brew install coreutils
 
-# 2. Newer Bash (optional but recommended)
+# 2. Newer Bash — OPTIONAL: only swaps fanout --local-parallel's poll loop for
+#    the faster `wait -n`. The skill works on stock bash 3.2 without this.
 brew install bash
 
 # 3. jq
@@ -126,35 +130,34 @@ which timeout && timeout --version | head -1
 #### Windows
 
 Claude Code itself runs natively on Windows, but **this skill requires a POSIX
-shell**. Two supported paths:
+shell plus Unix coreutils, so native Windows is not supported** — use WSL.
 
-**Recommended — WSL2 (Ubuntu / Debian).** Treat the WSL distro as a Linux
-machine and follow the Linux instructions above. Run Claude Code from inside
-WSL so the skill resolves `~/.claude/skills/cursor/` correctly. Cursor CLI for
-Linux installs cleanly inside WSL.
-
-**Alternative — Git Bash (MSYS2).** Workable but requires care:
+**WSL2 (Ubuntu / Debian) is the supported path.** Treat the WSL distro as a
+Linux machine and follow the Linux instructions above. Run Claude Code from
+inside WSL so the skill resolves `~/.claude/skills/cursor/` correctly; Cursor
+CLI for Linux installs cleanly inside WSL.
 
 ```bash
-# inside Git Bash
-pacman -S jq coreutils    # if using MSYS2 pacman
-# or download jq.exe from https://jqlang.github.io/jq/download/
-#    and drop it on PATH
-
-# Cursor CLI for Windows — installer bundles `cursor-agent.exe`
-# Make sure `agent` resolves; alias if needed:
-alias agent="cursor-agent"
+# In an elevated PowerShell:
+wsl --install -d Ubuntu
+# Reboot, open Ubuntu, then INSIDE WSL:
+sudo apt-get update && sudo apt-get install -y jq coreutils
+curl https://cursor.com/install -fsS | bash
+agent login
 ```
 
-**Caveats on Windows:**
-- File-mode bits (executable flag, sentinel files) behave differently on NTFS.
-  The skill creates files with the user's umask; tighten with
-  `umask 077` if you share a workstation.
+> **Git Bash / Cygwin are not officially supported.** They may partially work,
+> but path handling, file-mode bits, and the `timeout` wrap are untested there —
+> use WSL.
+
+**Notes when running under WSL:**
 - `~/.cursor/worktrees/<repo>/impl-*/` paths use forward slashes inside WSL but
   may surface as `\\wsl$\...` from Windows-side tooling — keep `implement`
   diff-review inside WSL or Cursor itself.
 - The 590 s `timeout` wrap matters: do not run the skill from a shell that
   imposes its own shorter idle timeout (some corporate Windows terminals do).
+- On a shared workstation, `umask 077` tightens the file-mode bits the skill
+  writes.
 
 ### One-time verification
 
@@ -430,6 +433,7 @@ to disable, token-free preview) are in the canonical config reference:
 | `CURSOR_DELEGATE_DRY_RUN`         | `1` skips the `agent` call and emits a `status=dry_run` summary (same as `--dry-run`; implies debug). |
 | `CURSOR_DELEGATE_DEBUG_PROMPT`    | `1` adds a 200-byte prompt-head preview to the dry-run summary (off by default — prompts can be sensitive). |
 | `CURSOR_DELEGATE_ALLOW_SYMLINK_STATE`| `1` allows `.cursor` / delegate / state to be a symlink (default `0` → V6 hard-fails). Use for tmpfs redirection. |
+| `CURSOR_DELEGATE_SKIP_SANDBOX_CHECK`  | `1` skips the `~/.cursor` writability pre-flight (use when writability is guaranteed another way, e.g. CI bind-mounts). Default `0`. |
 | `CURSOR_DELEGATE_LOCAL_PARALLEL`  | `1` forces `fanout --local-parallel` mode. |
 | `CURSOR_DELEGATE_FORCE_CLAUDE`    | `1` disables auto-flip to local-parallel even when the flag is set. |
 | `CURSOR_DELEGATE_FANOUT_MODE`     | Internal — lets `synthesize.sh` skip the flag write in local-parallel. |
@@ -521,10 +525,12 @@ These contracts are enforced in code and in `tests/unit/`:
 
 **Retry classification** (`cd_classify_exit`):
 - `SUCCESS` (0) — done.
-- `PERMANENT` (124, 2, 3, 130, 137 + explicit deny markers) — never retry.
-- `TRANSIENT` (network timeouts / rate-limit markers) — exponential backoff
-  (1 s → 2 s → 4 s), up to `retry.max_attempts` (default 3).
-- `UNKNOWN` (everything else) — treated as PERMANENT (fail-fast).
+- `TRANSIENT` (explicit whitelist `7 / 28 / 52` — curl connect / timeout /
+  empty-reply — and `429` rate-limit) — exponential backoff (1 s → 2 s → 4 s),
+  up to `retry.max_attempts` (default 3).
+- `PERMANENT` (`2` binary/auth, `3` model, `4` config, `124` timeout, `125`,
+  `126`, `127`, `130`, `137`, `143`) — never retry.
+- `UNKNOWN` (everything else) — treated as PERMANENT (default-deny / fail-fast).
 
 **Logs**: every subcommand writes to stderr via `cd_log LEVEL "message"` where
 LEVEL ∈ `INFO | WARN | ERROR`. Stdout is reserved for the data contracts
@@ -613,10 +619,11 @@ bash ~/.claude/skills/cursor/tests/run.sh unit
 All Phase 4 validation items (A1, V1–V12, F6–F8) are resolved as of
 2026-04-28. See `TODO.md` for per-item details.
 
-**Bash 4.3+ required for `--local-parallel`**: the semaphore now uses
-`wait -n`. Systems with older bash get a clear error with upgrade hints
-(macOS: `brew install bash`, Git Bash: update Git for Windows, WSL2:
-`sudo apt install bash`).
+**`--local-parallel` runs on bash 3.2+**: the semaphore prefers `wait -n`
+(bash 4.3+) and **falls back to a poll loop** on older bash, so macOS stock
+`/bin/bash` (3.2) works without an upgrade. `brew install bash` is optional and
+only swaps the poll loop for the event-driven `wait -n` (it logs which path it
+took).
 
 ### Upstream / environmental caveats
 
