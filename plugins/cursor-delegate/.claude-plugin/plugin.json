@@ -1,6 +1,5 @@
 {
   "name": "cursor-delegate",
-  "version": "1.0.0",
   "description": "Delegate implement/review/plan/investigate/security tasks to Cursor CLI (agent) from Claude Code. Bundles the `cursor` delegation skill (parallel fanout, resume/status/cancel, per-task preamble) and the `cursor-setup` cross-platform readiness doctor.",
   "author": {
     "name": "HiroFumiko"

@@ -4,15 +4,13 @@
     "name": "HiroFumiko"
   },
   "metadata": {
-    "description": "Delegate coding tasks to the Cursor CLI agent from Claude Code, plus a cross-platform setup doctor.",
-    "version": "1.0.0"
+    "description": "Delegate coding tasks to the Cursor CLI agent from Claude Code, plus a cross-platform setup doctor."
   },
   "plugins": [
     {
       "name": "cursor-delegate",
       "source": "./plugins/cursor-delegate",
       "description": "Delegate implement/review/plan/investigate/security tasks to Cursor CLI (agent) from Claude Code, with parallel fanout, resume/status/cancel, and a one-shot readiness doctor.",
-      "version": "1.0.0",
       "author": { "name": "HiroFumiko" },
       "keywords": ["cursor", "delegation", "code-review", "agent", "fanout"],
       "category": "productivity"
