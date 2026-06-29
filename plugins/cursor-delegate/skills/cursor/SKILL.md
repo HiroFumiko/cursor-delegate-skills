@@ -1,6 +1,7 @@
 ---
 name: cursor
 description: Delegate implement / review / plan / investigate / security tasks to Cursor CLI (`agent`) from Claude Code. Auto-orchestrates parallel delegation when multiple independent tasks are detected. Triggers on "cursor", "delegate to cursor", "move to cursor", "cursor-cli", "ask cursor", "cursor orchestrate", or when the user wants to hand off a coding task to Cursor — including Japanese phrasings like 「cursorに委譲」「cursorに渡す」「cursorに調べさせて」「cursorでレビュー」「cursorに聞く」.
+argument-hint: <implement|review|plan|investigate|security|fanout|resume|status|cancel|setup|help> [args] [--debug|--dry-run]
 level: 4
 version: 1.0.0
 ---
