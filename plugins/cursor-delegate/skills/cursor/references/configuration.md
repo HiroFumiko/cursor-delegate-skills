@@ -37,7 +37,7 @@ shared path, no cross-job TOCTOU.
   "defaults": {
     "implement":   { "model": "auto", "force": true,  "worktree": true,  "sandbox": "enabled" },
     "review":      { "model": "auto", "mode": "ask",  "sandbox": "enabled",
-                     "preamble": ["コードレビュアーとして…", "", "{{prompt}}"] },
+                     "preamble": ["You are a code reviewer…", "{{prompt}}"] },
     "plan":        { "model": "auto", "mode": "plan", "sandbox": "enabled" },
     "investigate": { "model": "auto", "mode": "ask",  "sandbox": "enabled" },
     "security":    { "model": "auto", "mode": "ask",  "sandbox": "enabled" }
@@ -52,6 +52,16 @@ shared path, no cross-job TOCTOU.
 (bool), `worktree` (bool), `sandbox` (`enabled|disabled`), `preamble`
 (string or array-of-strings). The machine-readable JSON Schema is
 `config/schema.json`.
+
+A fully annotated, copy-pasteable version of this schema — every field with an
+inline comment — ships as [`config/.cursor.example.json`](../config/.cursor.example.json).
+It is a reference only (never loaded by the skill): strip the `//` comments,
+keep only the keys you override, and save the result as `~/.cursor.json` or
+`<repo>/.cursor.json`. To generate a ready-to-use config instead, run
+`bash lib/setup.sh --init-config user|project` — it writes a copy of the shipped
+defaults you can edit in place. (A full copy pins those values into the override
+layer, so a field you keep no longer tracks future skill-default updates; delete
+a field to re-enable default tracking, or empty `defaults` for a diff-only file.)
 
 ## Task routing defaults
 
@@ -99,10 +109,8 @@ to* the user prompt.)
 "security": {
   "model": "auto", "mode": "ask",
   "preamble": [
-    "あなたはセキュリティ監査の担当です。OWASP Top 10 を主軸に分析し、",
-    "深刻度つきで報告してください。コードは一切変更しません。",
-    "",
-    "--- 監査対象 ---",
+    "You run the security audit. Analyze the target centered on the OWASP Top 10,",
+    "and report findings with severity. Do not modify any code.",
     "{{prompt}}"
   ]
 }

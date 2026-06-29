@@ -17,10 +17,10 @@
 #   bash setup.sh --print-permissions          print the settings.json allow entries
 #   bash setup.sh --apply-permissions          merge allow entries into settings.json
 #   bash setup.sh --init-config <scope> [--force]
-#                                              scaffold a minimal override
-#                                              .cursor.json at user scope
-#                                              (~/.cursor.json) or project scope
-#                                              (<cwd>/.cursor.json)
+#                                              seed a ready-to-use .cursor.json
+#                                              (copy of shipped defaults) at user
+#                                              scope (~/.cursor.json) or project
+#                                              scope (<cwd>/.cursor.json)
 #   bash setup.sh --help
 #
 # Exit codes:
@@ -59,17 +59,17 @@ Usage: /cursor-setup [--check | --print-permissions | --apply-permissions
   --apply-permissions  Merge those entries into ~/.claude/settings.json
                        (backs up to settings.json.cursor-setup.bak first).
   --init-config <scope> [--force]
-                       Scaffold a MINIMAL override .cursor.json ({"version":1,
-                       "defaults":{}}) at:
+                       Seed a ready-to-use .cursor.json (a copy of the shipped
+                       defaults) at:
                          user     -> ~/.cursor.json      (every repo, this user)
                          project  -> <cwd>/.cursor.json  (this repo; committable)
-                       Empty defaults is a no-op on the deep-merge, so the skill
-                       default applies until you add a diff — and fields you don't
-                       override keep receiving skill-default updates (marketplace
-                       overwrites layer 1, never these override files). Never
-                       overwrites an existing file unless --force (prior file
-                       backed up to <target>.cursor-setup.bak). Prints
-                       "WROTE\t<path>" or "EXISTS\t<path>" to stdout.
+                       The file holds real, editable values you can tweak right
+                       away. A full copy pins those values, so a field you keep
+                       won't track future skill-default updates; delete a field
+                       to let it fall back to the default again. Never overwrites
+                       an existing file unless --force (prior file backed up to
+                       <target>.cursor-setup.bak). Prints "WROTE\t<path>" or
+                       "EXISTS\t<path>" to stdout.
   --help               This help.
 EOF
 }
@@ -323,16 +323,19 @@ apply_permissions() {
 }
 
 # ------------------------------------------------------------------------------
-# Override scaffold (--init-config).
+# Config seed (--init-config).
 #
-# Writes a MINIMAL override `.cursor.json` ({"version":1,"defaults":{}}) at user
-# scope (~/.cursor.json) or project scope (<cwd>/.cursor.json). An empty
-# `defaults` is a no-op on the deep-merge, so the skill default (layer 1) fully
-# applies until the user adds a diff. This is deliberately NOT a copy of the
-# skill default: marketplace updates overwrite layer 1 but never these override
-# files, and a full copy would shadow every future skill-default improvement.
-# A minimal scaffold gives the user a marketplace-safe place to record only the
-# fields they want to change, while untouched fields keep tracking the default.
+# Writes a ready-to-use `.cursor.json` at user scope (~/.cursor.json) or project
+# scope (<cwd>/.cursor.json) by copying the shipped skill default
+# (config/.cursor.json) verbatim. The generated file therefore holds real,
+# editable values (models, modes, preambles) the user can tweak immediately —
+# not an empty stub that looks configured but does nothing until edited.
+#
+# Tradeoff: a full copy PINS every value into the override layer, so a field the
+# user keeps no longer tracks future skill-default improvements (marketplace
+# updates overwrite layer 1, never these override files). Deleting a field from
+# the override re-enables default tracking for it; users who instead want a
+# marketplace-safe file that records only intentional diffs can empty `defaults`.
 #
 # Safety: never clobbers an existing file unless --force; with --force the prior
 # file is backed up to <target>.cursor-setup.bak first. Emits a machine-readable
@@ -371,19 +374,24 @@ init_config() {
     cd_log "INFO" "backed up existing config to ${target}.cursor-setup.bak"
   fi
 
-  # Minimal override scaffold. Static literal (no jq needed) — empty `defaults`
-  # merges as a no-op over the skill default.
-  cat >"${target}.tmp" <<'EOF'
-{
-  "version": 1,
-  "defaults": {}
-}
-EOF
+  # Seed the file with a FULL COPY of the shipped skill default so it is usable
+  # the moment it is written — real, editable values (models, modes, preambles)
+  # the user can tweak immediately, not an empty stub that looks configured but
+  # does nothing until edited. The shipped default is guaranteed valid strict
+  # JSON (the runtime loader rejects it otherwise), so a verbatim copy is always
+  # itself a valid `.cursor.json`.
+  if [[ ! -f "${CD_SKILL_CONFIG}" ]]; then
+    cd_log "ERROR" "skill default config not found: ${CD_SKILL_CONFIG} (broken install?)"
+    exit 70
+  fi
+  cp "${CD_SKILL_CONFIG}" "${target}.tmp"
   mv "${target}.tmp" "${target}"
   chmod 644 "${target}" 2>/dev/null || true   # no secrets ever live here; keep it readable/committable
-  cd_log "INFO" "wrote ${scope}-scope override scaffold: ${target}"
-  cd_log "INFO" "add ONLY the fields you want to change (e.g. a task's model/mode/preamble);"
-  cd_log "INFO" "untouched fields fall back to — and keep receiving updates from — the skill default."
+  cd_log "INFO" "wrote ${scope}-scope config (copy of the shipped defaults): ${target}"
+  cd_log "INFO" "it is ready to use as-is — edit the values in place to customize."
+  cd_log "INFO" "note: a full copy PINS these values, so a field you keep won't track"
+  cd_log "INFO" "      future skill-default updates; delete a field to fall back to the default."
+  cd_log "INFO" "annotated reference: skills/cursor/config/.cursor.example.json"
   cd_log "INFO" "schema + examples: skills/cursor/references/configuration.md"
   printf 'WROTE\t%s\n' "${target}"
 }

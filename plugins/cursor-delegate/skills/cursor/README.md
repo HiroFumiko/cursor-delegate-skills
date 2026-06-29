@@ -374,7 +374,7 @@ no shared path, no cross-job TOCTOU.
   "defaults": {
     "implement":   { "model": "auto", "force": true,  "worktree": true,  "sandbox": "enabled" },
     "review":      { "model": "auto", "mode": "ask",  "sandbox": "enabled",
-                     "preamble": ["コードレビュアーとして…", "", "{{prompt}}"] },
+                     "preamble": ["You are a code reviewer…", "{{prompt}}"] },
     "plan":        { "model": "auto", "mode": "plan", "sandbox": "enabled" },
     "investigate": { "model": "auto", "mode": "ask",  "sandbox": "enabled" },
     "security":    { "model": "auto", "mode": "ask",  "sandbox": "enabled" }
@@ -389,6 +389,13 @@ Project override example (`<repo>/.cursor.json`):
 ```json
 {"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}
 ```
+
+A fully annotated, copy-pasteable reference of every field lives in
+[`config/.cursor.example.json`](config/.cursor.example.json) — strip its `//`
+comments and keep only the keys you want to override. Or generate a ready-to-use
+config automatically: `bash lib/setup.sh --init-config user|project` writes a
+copy of the shipped defaults you can edit in place (a full copy pins those
+values, so delete any field you'd rather keep tracking the skill default).
 
 The default `auto` lets Cursor pick. To pin a model, use a name from
 `agent --list-models` (which also lists `auto` itself).
@@ -406,10 +413,8 @@ verbatim.
 "security": {
   "model": "auto", "mode": "ask",
   "preamble": [
-    "あなたはセキュリティ監査の担当です。OWASP Top 10 を主軸に分析し、",
-    "深刻度つきで報告してください。コードは一切変更しません。",
-    "",
-    "--- 監査対象 ---",
+    "You run the security audit. Analyze the target centered on the OWASP Top 10,",
+    "and report findings with severity. Do not modify any code.",
     "{{prompt}}"
   ]
 }

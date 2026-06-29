@@ -1,6 +1,6 @@
 ---
 name: cursor-setup
-description: Cross-platform readiness setup for the `cursor` delegation skill. Detects the host OS (WSL / Linux / macOS; native Windows is unsupported → WSL), checks every runtime dependency in one pass without spending Cursor tokens, generates the `~/.claude/settings.json` permission allowlist so read-only delegation runs without a prompt, and — once the verdict is READY — interactively scaffolds a minimal `.cursor.json` override at user or project scope so routing tweaks live outside the plugin and survive marketplace updates. Triggers on "/cursor-setup", "cursor setup", "setup cursor", "cursor 環境構築", "cursorのセットアップ", "cursor doctor", or when the cursor skill fails a preflight check (missing agent/jq/timeout/auth).
+description: Cross-platform readiness setup for the `cursor` delegation skill. Detects the host OS (WSL / Linux / macOS; native Windows is unsupported → WSL), checks every runtime dependency in one pass without spending Cursor tokens, generates the `~/.claude/settings.json` permission allowlist so read-only delegation runs without a prompt, and — once the verdict is READY — interactively seeds a ready-to-use `.cursor.json` (a copy of the shipped defaults) at user or project scope so routing tweaks live outside the plugin and survive marketplace updates. Triggers on "/cursor-setup", "cursor setup", "setup cursor", "cursor 環境構築", "cursorのセットアップ", "cursor doctor", or when the cursor skill fails a preflight check (missing agent/jq/timeout/auth).
 level: 2
 version: 1.0.0
 ---
@@ -70,7 +70,7 @@ the same script.
       (it edits the global `~/.claude/settings.json`, backing it up to
       `settings.json.cursor-setup.bak`).
 
-   b. **Scaffold a `.cursor.json` override** so the user's routing tweaks live
+   b. **Seed a `.cursor.json` config** so the user's routing tweaks live
       **outside** the plugin. Marketplace updates overwrite the skill default
       (layer 1) but **never** `~/.cursor.json` or `<cwd>/.cursor.json` — that is
       the whole point of writing an override. Use **AskUserQuestion** to ask
@@ -84,14 +84,15 @@ the same script.
       ```
       bash ${CLAUDE_PLUGIN_ROOT}/skills/cursor/lib/setup.sh --init-config <user|project>
       ```
-      The file is a **minimal override scaffold** (`{"version":1,"defaults":{}}`):
-      an empty `defaults` is a no-op on the deep-merge, so the skill default fully
-      applies until the user adds a diff — and fields they don't override keep
-      receiving skill-default improvements on future updates (a full copy would
-      shadow them, which is why it is intentionally minimal).
-      - stdout `WROTE\t<path>` → tell the user the path, and that they add **only**
-        the fields they want to change (e.g. a task's `model` / `mode` /
-        `preamble`); point them at the schema + examples in
+      The file is a **ready-to-use copy of the shipped defaults** — it already
+      holds real values (models, modes, preambles) the user can edit in place,
+      not an empty stub that looks configured but does nothing until edited.
+      (A full copy pins those values into the override layer, so a field the user
+      keeps no longer tracks future skill-default updates; deleting a field
+      re-enables default tracking for it.)
+      - stdout `WROTE\t<path>` → tell the user the path, and that the file works
+        as-is — they edit values in place to customize (e.g. a task's `model` /
+        `mode` / `preamble`); point them at the schema + examples in
         [`configuration.md`](../cursor/references/configuration.md).
       - stdout `EXISTS\t<path>` → the file already exists. Ask via
         **AskUserQuestion** whether to overwrite; only on *yes* re-run with
@@ -108,8 +109,8 @@ the same script.
 - `--apply-permissions` and `--init-config` are the mutating modes — always
   confirm with the user first (the AskUserQuestion in step 3b covers the config
   scope choice). `--apply-permissions` writes `~/.claude/settings.json`;
-  `--init-config <scope>` writes a minimal override scaffold
-  (`{"version":1,"defaults":{}}`) to `~/.cursor.json` or `<cwd>/.cursor.json` and
+  `--init-config <scope>` writes a ready-to-use copy of the shipped defaults
+  to `~/.cursor.json` or `<cwd>/.cursor.json` and
   **never overwrites** an existing file unless `--force` (which backs the old one
   up to `<path>.cursor-setup.bak`). `.cursor.json` must **never** contain a
   `CURSOR_API_KEY` — keep secrets in the environment.
