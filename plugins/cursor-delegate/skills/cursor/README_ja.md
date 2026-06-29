@@ -347,7 +347,7 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
   "defaults": {
     "implement":   { "model": "auto", "force": true,  "worktree": true,  "sandbox": "enabled" },
     "review":      { "model": "auto", "mode": "ask",  "sandbox": "enabled",
-                     "preamble": ["コードレビュアーとして…", "", "{{prompt}}"] },
+                     "preamble": ["You are a code reviewer…", "{{prompt}}"] },
     "plan":        { "model": "auto", "mode": "plan", "sandbox": "enabled" },
     "investigate": { "model": "auto", "mode": "ask",  "sandbox": "enabled" },
     "security":    { "model": "auto", "mode": "ask",  "sandbox": "enabled" }
@@ -362,6 +362,13 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 ```json
 {"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}
 ```
+
+全フィールドに注釈を付けたコピペ用リファレンスが
+[`config/.cursor.example.json`](config/.cursor.example.json) にあります。`//`
+コメントを除去し、上書きしたいキーだけを残してください。すぐ使える設定を自動生成
+するなら `bash lib/setup.sh --init-config user|project` を使います。これは同梱
+デフォルトのコピーを書き出すので、その場で値を編集できます(完全コピーは値を固定
+するため、デフォルト追従に戻したいフィールドは削除してください)。
 
 既定の `auto` は Cursor がモデルを自動選択します。特定モデルに固定する場合は
 `agent --list-models`(`auto` 自体も一覧に含まれます)の名前を使用してください。
@@ -378,10 +385,8 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 "security": {
   "model": "auto", "mode": "ask",
   "preamble": [
-    "あなたはセキュリティ監査の担当です。OWASP Top 10 を主軸に分析し、",
-    "深刻度つきで報告してください。コードは一切変更しません。",
-    "",
-    "--- 監査対象 ---",
+    "You run the security audit. Analyze the target centered on the OWASP Top 10,",
+    "and report findings with severity. Do not modify any code.",
     "{{prompt}}"
   ]
 }

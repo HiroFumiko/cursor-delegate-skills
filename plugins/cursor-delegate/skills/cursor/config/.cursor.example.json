@@ -1,0 +1,102 @@
+// .cursor.example.json — annotated reference for the `cursor` delegation skill.
+//
+// HOW TO USE THIS FILE
+//   This is a documented REFERENCE, not a live config. The skill never loads a
+//   `.cursor.example.json`. To apply settings, put a real `.cursor.json` at one
+//   of the override locations below and copy in ONLY the fields you want to
+//   change — every untouched field keeps tracking the shipped skill default
+//   (and keeps receiving marketplace updates).
+//
+//   Strip the `//` comments before saving: a real `.cursor.json` must be strict
+//   JSON (the runtime parses it with `jq`, which rejects comments).
+//   Quick scaffold of a minimal override instead of hand-copying:
+//     bash skills/cursor/lib/setup.sh --init-config user      # ~/.cursor.json
+//     bash skills/cursor/lib/setup.sh --init-config project   # <repo>/.cursor.json
+//
+// FILE PRECEDENCE — three layers, deep-merged, last wins:
+//   1. skills/cursor/config/.cursor.json  — skill default (shipped; do not edit)
+//   2. ~/.cursor.json                     — user override  (every repo, this user)
+//   3. <repo>/.cursor.json                — project override (this repo; committable)
+//   Merge is a recursive object merge: a scalar or array in a deeper layer
+//   REPLACES the shallower one (arrays are not concatenated).
+//
+// Full spec: skills/cursor/references/configuration.md · Schema: config/schema.json
+{
+  // Config format version. Must be 1.
+  "version": 1,
+
+  // Per-task routing. One block per task type; every block needs at least "model".
+  "defaults": {
+    // implement — writes code. Runs in an isolated git worktree by default.
+    "implement": {
+      "model": "auto",       // model name from `agent --list-models`, or "auto"
+      "force": true,         // true = non-interactive (no confirmation prompts)
+      "worktree": true       // true = run inside a throwaway worktree (impl-<id>)
+      // "mode": "agent",    // optional: ask | plan | agent | edit
+      // "sandbox": "enabled" // optional: enabled | disabled (default: enabled)
+    },
+
+    // review — read-only code review. "preamble" is what specializes the lens.
+    "review": {
+      "model": "auto",
+      "mode": "ask",         // ask = read-only Q&A; the lens must not edit code
+      // preamble: task-specific text combined with the user prompt.
+      //   - string OR array of strings (array is joined with newlines)
+      //   - {{prompt}} marks where the user prompt is inserted; if omitted, the
+      //     preamble is prepended with a "\n\n---\n\n" separator
+      //   - set "preamble": "" to disable a shipped default
+      "preamble": [
+        "You are an experienced code reviewer. Read the target and point out bugs,",
+        "design issues, and readability or maintainability concerns. Tag each finding",
+        "with a severity (critical/high/medium/low) and briefly state the rationale and",
+        "a suggested fix. Do not modify any code.",
+        "{{prompt}}"
+      ]
+    },
+
+    // plan — produces a plan, no edits.
+    "plan": {
+      "model": "auto",
+      "mode": "plan"
+    },
+
+    // investigate — read-only codebase explanation.
+    "investigate": {
+      "model": "auto",
+      "mode": "ask",
+      "preamble": [
+        "You investigate the codebase. Read and explain the target's behavior,",
+        "structure, and data flow based on facts. Mark any speculation as speculation.",
+        "Do not modify any code.",
+        "{{prompt}}"
+      ]
+    },
+
+    // security — read-only security audit.
+    "security": {
+      "model": "auto",
+      "mode": "ask",
+      "preamble": [
+        "You run the security audit. Centered on the OWASP Top 10, analyze the target",
+        "across authentication, authorization, input validation, secret leakage,",
+        "injection, and insecure dependencies. Tag each finding with a severity",
+        "(critical/high/medium/low), reproduction conditions, and a suggested fix.",
+        "Do not modify any code.",
+        "{{prompt}}"
+      ]
+    }
+  },
+
+  // Retry policy for transient `agent` failures.
+  "retry": {
+    "max_attempts": 3,            // 1..10
+    "initial_delay_ms": 1000,     // >= 0
+    "backoff": "exponential"      // exponential | linear
+  },
+
+  // Per-call timeout in seconds (1..600).
+  "timeout_sec": 590
+
+  // Max concurrent jobs for parallel `fanout` (1..16; default 4).
+  // "max_fanout": 4
+}

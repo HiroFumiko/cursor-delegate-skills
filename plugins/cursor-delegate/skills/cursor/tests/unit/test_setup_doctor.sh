@@ -110,9 +110,10 @@ else
   fail "apply backup" "no .cursor-setup.bak"
 fi
 
-# ---- Test 6: --init-config user writes a MINIMAL override scaffold ----
-# Minimal scaffold = {"version":1,"defaults":{}}: valid JSON, empty defaults so
-# it is a no-op on the deep-merge (the skill default fully applies).
+# ---- Test 6: --init-config user seeds a COPY of the shipped default ----
+# The generated ~/.cursor.json is a verbatim copy of config/.cursor.json, so it
+# holds real, editable values (not an empty stub) and equals the skill default.
+SKILL_CFG="${REAL_SKILL_DIR}/config/.cursor.json"
 ICFG_HOME="${TMPDIR_TEST}/home_initcfg"
 mkdir -p "${ICFG_HOME}"
 set +e
@@ -122,8 +123,8 @@ USER_CFG="${ICFG_HOME}/.cursor.json"
 if [[ ${RC_IC} -eq 0 ]] \
   && printf '%s' "${OUT_IC}" | grep -q "WROTE" \
   && [[ -f "${USER_CFG}" ]] \
-  && jq -e '.version == 1 and (.defaults | length == 0)' "${USER_CFG}" >/dev/null 2>&1; then
-  pass "init-config user: wrote minimal override scaffold ~/.cursor.json (WROTE)"
+  && jq -e --slurpfile def "${SKILL_CFG}" '. == $def[0]' "${USER_CFG}" >/dev/null 2>&1; then
+  pass "init-config user: wrote ~/.cursor.json as a copy of the shipped default (WROTE)"
 else
   fail "init-config user" "rc=${RC_IC} out=$(printf '%s' "${OUT_IC}" | tail -1)"
 fi
@@ -149,8 +150,8 @@ if [[ ${RC_FORCE} -eq 0 ]] \
   && printf '%s' "${OUT_FORCE}" | grep -q "WROTE" \
   && [[ -f "${USER_CFG}.cursor-setup.bak" ]] \
   && jq -e '.defaults.sentinel == true' "${USER_CFG}.cursor-setup.bak" >/dev/null 2>&1 \
-  && jq -e '.version == 1 and (.defaults | length == 0)' "${USER_CFG}" >/dev/null 2>&1; then
-  pass "init-config --force: overwrote with scaffold + backed up prior file"
+  && jq -e --slurpfile def "${SKILL_CFG}" '. == $def[0]' "${USER_CFG}" >/dev/null 2>&1; then
+  pass "init-config --force: overwrote with default copy + backed up prior file"
 else
   fail "init-config --force" "rc=${RC_FORCE} out=$(printf '%s' "${OUT_FORCE}" | tail -1)"
 fi

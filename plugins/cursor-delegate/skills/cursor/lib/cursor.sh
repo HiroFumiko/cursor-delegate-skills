@@ -43,7 +43,8 @@ Subcommands:
   cancel   <JOB_ID>                            SIGTERM -> (5s) -> SIGKILL
   setup    [--print-permissions|--apply-permissions|--init-config <user|project>]
                                                Cross-platform readiness doctor +
-                                               minimal .cursor.json override scaffold
+                                               ready-to-use .cursor.json seed
+                                               (copy of shipped defaults)
                                                (alias: doctor). See /cursor-setup.
 
 Task-type shortcuts (omit `dispatch`):
