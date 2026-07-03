@@ -49,7 +49,7 @@ runtime — so setup and delegation always agree on paths, models, and permissio
 
 - Five explicit task types — `implement` / `review` / `plan` / `investigate` / `security` (never inferred from free text).
 - Parallel `fanout`, plus `resume` / `status` / `cancel` and a token-free `--dry-run`.
-- Per-task `preamble` to specialize each lens; deterministic config in `.cursor.json` (3-layer deep-merge).
+- Per-task `preamble` to specialize each lens; deterministic config in `.cursor.json` (2-layer deep-merge).
 - Read-only lenses run without a prompt; write (`implement`) always prompts.
 
 **Readiness (`cursor-setup`)**
@@ -123,7 +123,7 @@ composer-2.5 - Composer 2.5
 Set it per task type, in whichever layer matches the scope you want:
 
 ```jsonc
-// <repo>/.cursor.json — pin review + security for this project only
+// ~/.cursor.json — pin review + security for this user
 {
   "defaults": {
     "review":   { "model": "gpt-5.3-codex-high" },
@@ -132,17 +132,16 @@ Set it per task type, in whichever layer matches the scope you want:
 }
 ```
 
-Precedence is **deep-merged, last wins** across three layers:
+Precedence is **deep-merged, last wins** across two layers:
 
 1. `${CLAUDE_PLUGIN_ROOT}/skills/cursor/config/.cursor.json` — skill default
 2. `~/.cursor.json` — user override (applies everywhere)
-3. `<cwd>/.cursor.json` — project override (commit it to share with the repo)
 
-Because the merge is per-leaf, a `<repo>/.cursor.json` that only sets
+Because the merge is per-leaf, a `~/.cursor.json` that only sets
 
 `review.model` keeps every other field (`mode`, `preamble`, `sandbox`, …) from
 
-the layers beneath it.
+the skill default beneath it.
 
 **Validation.** The resolved model is matched against `agent --list-models` at
 

@@ -16,11 +16,8 @@
 #   bash setup.sh [--check]                    full doctor report + verdict (default)
 #   bash setup.sh --print-permissions          print the settings.json allow entries
 #   bash setup.sh --apply-permissions          merge allow entries into settings.json
-#   bash setup.sh --init-config <scope> [--force]
-#                                              seed a ready-to-use .cursor.json
-#                                              (copy of shipped defaults) at user
-#                                              scope (~/.cursor.json) or project
-#                                              scope (<cwd>/.cursor.json)
+#   bash setup.sh --init-config [--force]      seed a ready-to-use ~/.cursor.json
+#                                              (copy of shipped defaults)
 #   bash setup.sh --help
 #
 # Exit codes:
@@ -46,7 +43,7 @@ SETTINGS_JSON="${HOME}/.claude/settings.json"
 usage() {
   cat >&2 <<'EOF'
 Usage: /cursor-setup [--check | --print-permissions | --apply-permissions
-                      | --init-config <user|project> [--force]]
+                      | --init-config [--force]]
 
   (default)            Run the readiness doctor: detect OS, check every
   --check              dependency, and print a verdict + per-OS fix-it steps.
@@ -58,18 +55,16 @@ Usage: /cursor-setup [--check | --print-permissions | --apply-permissions
                        cancel / resume are deliberately omitted (still prompt).
   --apply-permissions  Merge those entries into ~/.claude/settings.json
                        (backs up to settings.json.cursor-setup.bak first).
-  --init-config <scope> [--force]
-                       Seed a ready-to-use .cursor.json (a copy of the shipped
-                       defaults) at:
-                         user     -> ~/.cursor.json      (every repo, this user)
-                         project  -> <cwd>/.cursor.json  (this repo; committable)
-                       The file holds real, editable values you can tweak right
-                       away. A full copy pins those values, so a field you keep
-                       won't track future skill-default updates; delete a field
-                       to let it fall back to the default again. Never overwrites
-                       an existing file unless --force (prior file backed up to
-                       <target>.cursor-setup.bak). Prints "WROTE\t<path>" or
-                       "EXISTS\t<path>" to stdout.
+  --init-config [--force]
+                       Seed a ready-to-use ~/.cursor.json (a copy of the shipped
+                       defaults) — the user-scope override that applies to every
+                       repo for this user. The file holds real, editable values
+                       you can tweak right away. A full copy pins those values, so
+                       a field you keep won't track future skill-default updates;
+                       delete a field to let it fall back to the default again.
+                       Never overwrites an existing file unless --force (prior
+                       file backed up to <target>.cursor-setup.bak). Prints
+                       "WROTE\t<path>" or "EXISTS\t<path>" to stdout.
   --help               This help.
 EOF
 }
@@ -325,15 +320,15 @@ apply_permissions() {
 # ------------------------------------------------------------------------------
 # Config seed (--init-config).
 #
-# Writes a ready-to-use `.cursor.json` at user scope (~/.cursor.json) or project
-# scope (<cwd>/.cursor.json) by copying the shipped skill default
-# (config/.cursor.json) verbatim. The generated file therefore holds real,
-# editable values (models, modes, preambles) the user can tweak immediately —
-# not an empty stub that looks configured but does nothing until edited.
+# Writes a ready-to-use user-scope `~/.cursor.json` by copying the shipped skill
+# default (config/.cursor.json) verbatim. The generated file therefore holds
+# real, editable values (models, modes, preambles) the user can tweak
+# immediately — not an empty stub that looks configured but does nothing until
+# edited. It applies to every repo for this user.
 #
 # Tradeoff: a full copy PINS every value into the override layer, so a field the
 # user keeps no longer tracks future skill-default improvements (marketplace
-# updates overwrite layer 1, never these override files). Deleting a field from
+# updates overwrite layer 1, never this override file). Deleting a field from
 # the override re-enables default tracking for it; users who instead want a
 # marketplace-safe file that records only intentional diffs can empty `defaults`.
 #
@@ -344,23 +339,8 @@ apply_permissions() {
 # ------------------------------------------------------------------------------
 
 init_config() {
-  local scope="${1:-}"
-  local force="${2:-0}"
-  local target
-
-  case "${scope}" in
-    user)    target="${HOME}/.cursor.json" ;;
-    project) target="${PWD}/.cursor.json" ;;
-    *)
-      cd_log "ERROR" "--init-config needs a scope: 'user' (~/.cursor.json) or 'project' (<cwd>/.cursor.json)"
-      exit 64
-      ;;
-  esac
-
-  # user and project scope collapse to the same file when cwd is $HOME.
-  if [[ "${scope}" == "project" && "${PWD}" == "${HOME}" ]]; then
-    cd_log "WARN" "cwd is your home directory — project scope == user scope (both ${target})"
-  fi
+  local force="${1:-0}"
+  local target="${HOME}/.cursor.json"
 
   if [[ -e "${target}" && "${force}" != "1" ]]; then
     cd_log "WARN" "config already exists: ${target}"
@@ -387,7 +367,7 @@ init_config() {
   cp "${CD_SKILL_CONFIG}" "${target}.tmp"
   mv "${target}.tmp" "${target}"
   chmod 644 "${target}" 2>/dev/null || true   # no secrets ever live here; keep it readable/committable
-  cd_log "INFO" "wrote ${scope}-scope config (copy of the shipped defaults): ${target}"
+  cd_log "INFO" "wrote user-scope config (copy of the shipped defaults): ${target}"
   cd_log "INFO" "it is ready to use as-is — edit the values in place to customize."
   cd_log "INFO" "note: a full copy PINS these values, so a field you keep won't track"
   cd_log "INFO" "      future skill-default updates; delete a field to fall back to the default."
@@ -454,7 +434,6 @@ run_check() {
 # ------------------------------------------------------------------------------
 
 MODE="check"
-INIT_SCOPE=""
 INIT_FORCE=0
 case "${1:-}" in
   ""|--check)          MODE="check" ;;
@@ -463,11 +442,14 @@ case "${1:-}" in
   --init-config)
     MODE="init"
     shift
-    INIT_SCOPE="${1:-}"
-    [[ $# -gt 0 ]] && shift   # consume the scope token (if present)
     while [[ $# -gt 0 ]]; do
       case "$1" in
         --force) INIT_FORCE=1 ;;
+        user)    : ;;   # back-compat: user is the only (implicit) scope now
+        project)
+          cd_log "ERROR" "project-scope config was removed — config is now user-scope only (~/.cursor.json)"
+          exit 64
+          ;;
         *)
           cd_log "ERROR" "unknown argument for --init-config: $1"
           usage
@@ -489,5 +471,5 @@ case "${MODE}" in
   check) run_check ;;            # exit code from run_check (0 ready / 1 needs setup)
   print) print_permissions ;;
   apply) apply_permissions ;;
-  init)  init_config "${INIT_SCOPE}" "${INIT_FORCE}" ;;
+  init)  init_config "${INIT_FORCE}" ;;
 esac

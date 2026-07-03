@@ -18,39 +18,16 @@ detail — so the schema lives in one place and can't drift across docs.
 **Deep-merged, last wins.** Layers in ascending precedence:
 
 1. `${CLAUDE_PLUGIN_ROOT}/skills/cursor/config/.cursor.json` — skill default
-2. `~/.cursor.json` — user override
-3. **project** — discovered via git (see below), in ascending precedence:
-   1. `<main-checkout-root>/.cursor.json` — shared baseline across all git
-      worktrees (resolved from `git rev-parse --git-common-dir`)
-   2. `<current-worktree-root>/.cursor.json` — per-worktree override
-      (`git rev-parse --show-toplevel`)
-   3. `$PWD/.cursor.json` — non-git fallback, or the closest config when the run
-      starts in a repo subdirectory
-4. `$CURSOR_DELEGATE_PROJECT_CONFIG` — explicit override path, **highest**
-   precedence (an escape hatch for wrappers/CI; wins over all discovery)
+2. `~/.cursor.json` — user override (applies to every repo for this user)
 
-All share the same `.cursor.json` shape. The merge is a recursive jq object
+Both share the same `.cursor.json` shape. The merge is a recursive jq object
 merge (`reduce .[] as $x ({}; . * $x)`): leaf collisions take the deeper layer;
 a scalar/array value is **replaced** (not concatenated) by a deeper layer.
 
-### git worktree discovery
-
-The project layer is resolved against the **git repository**, not a bare `$PWD`.
-This is what lets git worktrees work: a project config committed to — or living
-untracked in — the **main checkout** is picked up from every linked worktree
-(via `--git-common-dir`), and a worktree may override it with its own
-root-level `.cursor.json` (via `--show-toplevel`). Anchoring at the git boundary
-also avoids ever walking up into `~/.cursor.json` and double-counting the user
-layer as a project layer.
-
-- **git is a soft dependency.** Outside a git work tree — or if `git` is not
-  installed — the project layer is simply `$PWD/.cursor.json`, i.e. the
-  historical behavior, with no error.
-- In a **plain checkout started at its root**, layers 3.1/3.2/3.3 are the same
-  file and collapse (de-duplicated) to a single project layer. Paths are
-  canonicalized to their physical (symlink-resolved) form so duplicates de-dupe
-  reliably (e.g. macOS `/var` → `/private/var`).
-- Bare repositories are not work trees, so discovery is skipped there.
+Config is **user-scoped only.** Routing overrides live in `~/.cursor.json` and
+apply to every repository. There is **no** per-project / per-repo config file —
+the skill never reads a `.cursor.json` from the working directory or the git
+repo, so nothing changes based on where a run is started.
 
 The merged result is snapshotted **per JOB_ID** to
 `.cursor/delegate/state/resolved-config-<JOB_ID>.json` at invocation time — no
@@ -84,12 +61,12 @@ worktree keeps its own runtime state.
 A fully annotated, copy-pasteable version of this schema — every field with an
 inline comment — ships as [`config/.cursor.example.json`](../config/.cursor.example.json).
 It is a reference only (never loaded by the skill): strip the `//` comments,
-keep only the keys you override, and save the result as `~/.cursor.json` or
-`<repo>/.cursor.json`. To generate a ready-to-use config instead, run
-`bash lib/setup.sh --init-config user|project` — it writes a copy of the shipped
-defaults you can edit in place. (A full copy pins those values into the override
-layer, so a field you keep no longer tracks future skill-default updates; delete
-a field to re-enable default tracking, or empty `defaults` for a diff-only file.)
+keep only the keys you override, and save the result as `~/.cursor.json`. To
+generate a ready-to-use config instead, run `bash lib/setup.sh --init-config` —
+it writes a copy of the shipped defaults you can edit in place. (A full copy pins
+those values into the override layer, so a field you keep no longer tracks future
+skill-default updates; delete a field to re-enable default tracking, or empty
+`defaults` for a diff-only file.)
 
 ## Task routing defaults
 
@@ -129,7 +106,7 @@ to* the user prompt.)
   through unchanged (fully backward compatible).
 - **Merge & override:** `preamble` follows the same layered deep-merge as every
   other field — a deeper layer **replaces** it. Disable a shipped default with
-  `"preamble": ""`, or retune it per-repo in the repo-root `.cursor.json`.
+  `"preamble": ""`, or retune it in `~/.cursor.json`.
 - **Composition is done in jq** (`join` / `gsub`), not bash parameter expansion,
   so arbitrary prompt text (backslashes, quotes) is handled safely on bash 3.2.
 

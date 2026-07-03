@@ -91,12 +91,10 @@ The read-only lenses are otherwise identical (`model: auto`, `mode: ask`); their
 without a `preamble` pass the prompt verbatim.
 
 Config precedence (deep-merge, last wins):
-`config/.cursor.json` < `~/.cursor.json` < **project**. The project layer is
-discovered via git — `<main-checkout-root>/.cursor.json` (shared across all git
-worktrees) < `<worktree-root>/.cursor.json` < `$PWD/.cursor.json` — with
-`$CURSOR_DELEGATE_PROJECT_CONFIG` as a highest-precedence explicit override. git
-is a soft dependency: outside a work tree the project layer is just
-`$PWD/.cursor.json`. The resolved config is snapshotted **per JOB_ID** to
+`config/.cursor.json` < `~/.cursor.json` (user override). Config is
+**user-scoped only** — there is no per-project / per-repo config file, so
+routing does not change based on where a run is started. The resolved config is
+snapshotted **per JOB_ID** to
 `.cursor/delegate/state/resolved-config-<JOB_ID>.json` — no shared file, no
 TOCTOU between concurrent jobs.
 
@@ -369,7 +367,7 @@ etc.).
 |---------|-------|-----|
 | `exit 2` before any agent call | `agent`, `jq`, or `timeout` not on PATH; or no auth | Install missing binary; set `CURSOR_API_KEY` or run `agent login` |
 | `exit 2` — `~/.cursor is not writable` | Claude Code Bash sandbox makes `~/.cursor/` read-only (WSL2 / `sandbox.enabled=true`) | Add `~/.cursor` to `sandbox.filesystem.allowWrite` in `~/.claude/settings.json`, or set `CURSOR_DELEGATE_SKIP_SANDBOX_CHECK=1` if you've allowlisted by another mechanism |
-| `exit 3` — model not found | Resolved model absent from `agent --list-models` | Check `config/.cursor.json` or a `~/.cursor.json` / project `.cursor.json` override |
+| `exit 3` — model not found | Resolved model absent from `agent --list-models` | Check `config/.cursor.json` or a `~/.cursor.json` override |
 | `exit 4` — config error | Malformed JSON in one of the config layers | Run `jq . <file>` on each layer (skill / user / project) to find the parse error |
 | `exit 124` — timeout | Job exceeded 590 s hard limit | Break prompt into smaller scope; never retry (permanent) |
 | Fanout runs sequentially | Claude runtime serializes Bash calls | Set `CURSOR_DELEGATE_LOCAL_PARALLEL=1` or wait for auto-detect flip |
