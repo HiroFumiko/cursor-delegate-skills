@@ -254,6 +254,84 @@ cd_check_symlink_guard() {
 }
 
 # ------------------------------------------------------------------------------
+# git-aware project config discovery (soft dependency on `git`)
+# ------------------------------------------------------------------------------
+#
+# The project-scope `.cursor.json` used to be read from `$PWD/.cursor.json` only.
+# That breaks git worktrees: a config committed to (or living untracked in) the
+# main checkout is invisible from a linked worktree, and a run started in a repo
+# subdirectory never sees the repo-root config.
+#
+# These helpers resolve the project layer against git instead of a bare `$PWD`.
+# Every git call is SOFT: guarded with `2>/dev/null`, and any failure (git not
+# installed, not a work tree, bare repo) yields an empty string and exit 0 —
+# never `cd_die`. Callers then fall back to `$PWD`, preserving pre-git behavior.
+
+# cd_git_main_root — absolute path of the *main checkout's* working-tree root, or
+# "" when not resolvable. From a linked worktree, `--git-common-dir` points at
+# the main checkout's `.git`, so its parent is the main root (shared by every
+# worktree). Absolutization uses `cd … && pwd`, which handles the relative `.git`
+# the main checkout returns and avoids `--path-format=absolute` (git 2.31+).
+cd_git_main_root() {
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  local common abs
+  common="$(git rev-parse --git-common-dir 2>/dev/null)" || return 0
+  [[ -n "${common}" ]] || return 0
+  # `pwd -P` (physical path) so this matches git's own symlink-resolved output
+  # (e.g. macOS /var -> /private/var), which keeps de-duplication in
+  # cd_project_config_candidates reliable.
+  abs="$(cd "${common}" 2>/dev/null && pwd -P)" || return 0
+  [[ -n "${abs}" ]] || return 0
+  dirname "${abs}"
+}
+
+# cd_git_worktree_root — absolute path of the *current worktree's* root
+# (`--show-toplevel`), or "" when not resolvable. This is the per-worktree
+# override layer.
+cd_git_worktree_root() {
+  git rev-parse --is-inside-work-tree >/dev/null 2>&1 || return 0
+  git rev-parse --show-toplevel 2>/dev/null || return 0
+}
+
+# cd_project_config_candidates — print the ordered list (lowest → highest
+# precedence, one absolute path per line) of *existing* project-config files to
+# merge:
+#
+#   <main-checkout-root>/<name>     shared baseline across worktrees
+#   <current-worktree-root>/<name>  per-worktree override
+#   $PWD/<name>                     non-git fallback / closest-on-subdir-start
+#   $CURSOR_DELEGATE_PROJECT_CONFIG  explicit override, wins over all discovery
+#
+# where <name> is $CD_PROJECT_CONFIG (default `.cursor.json`). Each path is
+# canonicalized (via its dir's real path) and de-duplicated keeping the first
+# (lowest-precedence) occurrence, so a plain checkout started at its root — where
+# all three roots collapse to one file — yields a single entry, identical to the
+# historical single-layer behavior. bash 3.2 safe (no associative arrays).
+cd_project_config_candidates() {
+  local name="${CD_PROJECT_CONFIG}"
+  local -a cands=()
+  local r
+
+  r="$(cd_git_main_root)";     [[ -n "${r}" ]] && cands+=("${r}/${name}")
+  r="$(cd_git_worktree_root)"; [[ -n "${r}" ]] && cands+=("${r}/${name}")
+  cands+=("${PWD}/${name}")
+  [[ -n "${CURSOR_DELEGATE_PROJECT_CONFIG:-}" ]] && cands+=("${CURSOR_DELEGATE_PROJECT_CONFIG}")
+
+  local seen="" cand dir base canon
+  for cand in "${cands[@]}"; do
+    dir="$(dirname "${cand}")"; base="$(basename "${cand}")"
+    # `pwd -P` resolves symlinks so a logical $PWD (e.g. macOS /var) canonicalizes
+    # to the same physical path git reports, so identical files de-dupe correctly.
+    canon="$(cd "${dir}" 2>/dev/null && pwd -P)" || continue
+    canon="${canon}/${base}"
+    [[ -f "${canon}" ]] || continue
+    case ":${seen}:" in *":${canon}:"*) continue ;; esac
+    seen="${seen}:${canon}"
+    printf '%s\n' "${canon}"
+  done
+}
+
+# ------------------------------------------------------------------------------
 # Config resolution — per-JOB_ID snapshot (never shared; closes TOCTOU).
 # ------------------------------------------------------------------------------
 
@@ -281,13 +359,18 @@ cd_resolve_config() {
     fi
     layers+=("${CD_USER_CONFIG}")
   fi
-  local proj_abs="${PWD}/${CD_PROJECT_CONFIG}"
-  if [[ -f "${proj_abs}" ]]; then
-    if ! jq -e . "${proj_abs}" >/dev/null 2>&1; then
-      cd_die 4 "project config is not valid JSON: ${proj_abs}"
+  # Project layer(s): git-aware discovery (main-checkout root, current-worktree
+  # root, $PWD, explicit override), each an independent deep-merged layer in
+  # ascending precedence. See cd_project_config_candidates. In a plain checkout
+  # started at its root the list collapses to a single path (== old behavior).
+  local proj
+  while IFS= read -r proj; do
+    [[ -n "${proj}" ]] || continue
+    if ! jq -e . "${proj}" >/dev/null 2>&1; then
+      cd_die 4 "project config is not valid JSON: ${proj}"
     fi
-    layers+=("${proj_abs}")
-  fi
+    layers+=("${proj}")
+  done < <(cd_project_config_candidates)
 
   local state_dir out abs
   state_dir="$(cd_state_dir)"

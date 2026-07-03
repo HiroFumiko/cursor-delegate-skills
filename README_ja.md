@@ -6,10 +6,12 @@
 
 ## 同梱スキル
 
-| スキル | 起動コマンド | 役割 |
-|--------|--------------|------|
-| `cursor-setup` | `/cursor-delegate:cursor-setup` | **環境を整える。** OS を判別し、依存コマンドと認証をまとめて確認したうえで(Cursor のトークンは消費しません)、読み取り専用タスク用の権限 allowlist を設定します。マシンごとに最初の 1 回だけ実行します。 |
-| `cursor` | `/cursor-delegate:cursor` | **実際に委譲する。** implement / review / plan / investigate / security の各タスクを Cursor に渡します。単発実行のほか、並列実行(`fanout`)、`resume` / `status` / `cancel`、タスクごとの `preamble` に対応。使い方の詳細は [`cursor/README_ja.md`](plugins/cursor-delegate/skills/cursor/README_ja.md) を参照してください。 |
+
+| スキル            | 起動コマンド                          | 役割                                                                                                                                                                                                                                                             |
+| -------------- | ------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `cursor-setup` | `/cursor-delegate:cursor-setup` | **環境を整える。** OS を判別し、依存コマンドと認証をまとめて確認したうえで(Cursor のトークンは消費しません)、読み取り専用タスク用の権限 allowlist を設定します。マシンごとに最初の 1 回だけ実行します。                                                                                                                                            |
+| `cursor`       | `/cursor-delegate:cursor`       | **実際に委譲する。** implement / review / plan / investigate / security の各タスクを Cursor に渡します。単発実行のほか、並列実行(`fanout`)、`resume` / `status` / `cancel`、タスクごとの `preamble` に対応。使い方の詳細は [`cursor/README_ja.md`](plugins/cursor-delegate/skills/cursor/README_ja.md) を参照してください。 |
+
 
 この 2 つは一体で動きます。`cursor-setup` は `cursor` と同じエンジン(`lib/setup.sh`)を使い、どちらも実行時に `${CLAUDE_PLUGIN_ROOT}/skills/cursor/…` を参照します。そのため、セットアップ側と委譲側でパス・モデル・権限がずれることはありません。
 
@@ -32,12 +34,14 @@
 ## できること
 
 **委譲側(`cursor`)**
+
 - タスクタイプは `implement` / `review` / `plan` / `investigate` / `security` の 5 種類だけ。自由文から勝手に推測することはありません。
 - 並列実行(`fanout`)に加え、`resume` / `status` / `cancel`、そしてトークンを使わない `--dry-run` を備えています。
 - タスクごとに `preamble` を差し込んで役割を持たせられます。挙動は `.cursor.json` で決まるので(3 層の deep-merge)、いつ実行しても同じ結果になります。
 - 読み取り専用のタスクは確認なしで実行し、ファイルを書き換える `implement` は必ず確認を挟みます。
 
 **準備側(`cursor-setup`)**
+
 - OS を判別し(WSL / Linux / macOS。ネイティブ Windows は WSL へ誘導)、環境ごとの対処手順を示します。
 - 依存コマンドと認証を診断します(`agent` を呼ばないのでトークンは一切かかりません)。
 - `~/.claude/settings.json` の権限 allowlist を生成・点検します。
@@ -68,9 +72,9 @@
 
 ## モデルの指定(`.cursor.json`)
 
-各タスクは `.cursor.json` で決まる `model` に振り分けられます。初期値はすべて **`auto`**(モデルは Cursor 側で自動選択)なので、何も設定しなくてもそのまま使えます。モデルを固定したいときだけ、いずれかの設定レイヤで `model` を指定してください。
+各タスクは `.cursor.json` で決まる `model` に振り分けられます。初期値はすべて `**auto**`(モデルは Cursor 側で自動選択)なので、何も設定しなくてもそのまま使えます。モデルを固定したいときだけ、いずれかの設定レイヤで `model` を指定してください。
 
-**モデル名は `agent --list-models` で確認できます。** 出力は 1 行が `<名前> - <説明>` の形式で、**` - ` より左がモデル名**です。この先頭部分をそのまま `.cursor.json` に書きます。
+**モデル名は `agent --list-models` で確認できます。** 出力は 1 行が `<名前> - <説明>` の形式で、`**-` より左がモデル名**です。この先頭部分をそのまま `.cursor.json` に書きます。
 
 ```
 $ agent --list-models
@@ -84,11 +88,13 @@ composer-2.5 - Composer 2.5
 …
 ```
 
-| `agent --list-models` の行 | `"model"` に書く値 |
-|----------------------------|--------------------|
-| `auto - Auto (current)`                              | `"auto"`                          |
-| `gpt-5.3-codex-high - Codex 5.3 High`                | `"gpt-5.3-codex-high"`            |
+
+| `agent --list-models` の行                               | `"model"` に書く値                    |
+| ------------------------------------------------------ | --------------------------------- |
+| `auto - Auto (current)`                                | `"auto"`                          |
+| `gpt-5.3-codex-high - Codex 5.3 High`                  | `"gpt-5.3-codex-high"`            |
 | `claude-opus-4-8-thinking-high - Opus 4.8 1M Thinking` | `"claude-opus-4-8-thinking-high"` |
+
 
 固定したいタスクだけを、適用したい範囲に合うレイヤに書きます。
 
@@ -135,4 +141,4 @@ cursor-delegate/
 
 - スキルは `BASH_SOURCE` で自分の置き場所を割り出すため、どこに置いても動きます。各 `SKILL.md` の起動コマンドも `${CLAUDE_PLUGIN_ROOT}` を使うので、インストール先を問いません。
 - スキルごとに、より詳しいドキュメント(`skills/cursor/README.md` / `README_ja.md` と `references/`)が付属します。ただしこちらは `~/.claude/skills/` への**手動**インストールを前提とした説明です。プラグインとして使う場合は、上記のクイックスタートに従ってください。
-- ユニットテストも同梱しています(`bash skills/cursor/tests/run.sh unit`)。`agent` をスタブ化するので API キーは不要、macOS の bash 3.2 でも 17 件すべて通ります。
+

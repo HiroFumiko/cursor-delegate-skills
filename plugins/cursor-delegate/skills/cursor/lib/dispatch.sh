@@ -158,7 +158,10 @@ if cd_is_debug; then
   cd_debug "prompt_len=${#PROMPT}  resume_chat_id=${RESUME_CHAT_ID:-<none>}"
   cd_debug "cwd=${PWD}  home=${HOME}"
   cd_debug "skill_dir=${CD_SKILL_DIR}"
-  cd_debug "config layers: skill=${CD_SKILL_CONFIG} user=${CD_USER_CONFIG} project=${PWD}/${CD_PROJECT_CONFIG}"
+  # Project layers are git-discovered (main-checkout root, worktree root, $PWD,
+  # explicit override) — show the actual chain that will be merged, low→high.
+  _cfg_proj="$(cd_project_config_candidates | tr '\n' ' ')"
+  cd_debug "config layers: skill=${CD_SKILL_CONFIG} user=${CD_USER_CONFIG} project=[${_cfg_proj:-<none>}]"
   cd_debug "out_dir=${OUT_DIR}  state_dir=${STATE_DIR}"
   cd_debug "dry_run=${CURSOR_DELEGATE_DRY_RUN:-0}  quarantine_hooks=${CURSOR_DELEGATE_QUARANTINE_HOOKS:-1}  timeout_override=${CURSOR_DELEGATE_TIMEOUT_SEC:-<none>}"
 fi

@@ -69,8 +69,11 @@ Examples:
   /cursor status --last 10
 
 Config: ~/.claude/skills/cursor/config/.cursor.json (skill default, editable)
-       Override via ~/.cursor.json (user) or <cwd>/.cursor.json (project)
-       All three layers use the same .cursor.json shape (deep-merged).
+       Override via ~/.cursor.json (user) or the project layer (deep-merged).
+       Project config is discovered via git: <repo-root>/.cursor.json is shared
+       across all git worktrees; a worktree may override it with its own
+       root-level .cursor.json. Outside a git repo it falls back to
+       <cwd>/.cursor.json. All layers use the same .cursor.json shape.
 EOF
 }
 

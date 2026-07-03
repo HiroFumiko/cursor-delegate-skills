@@ -329,15 +329,30 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 
 ### ファイル優先順位(deep-merge、後勝ち)
 
+優先度の低い順:
+
 1. `~/.claude/skills/cursor/config/.cursor.json` — スキル既定
 2. `~/.cursor.json` — ユーザ上書き
-3. `<cwd>/.cursor.json` — プロジェクト上書き
+3. **プロジェクト** — git で解決:
+   1. `<本チェックアウトのルート>/.cursor.json` — 全 git worktree で共有
+      (`git rev-parse --git-common-dir`)
+   2. `<現在の worktree ルート>/.cursor.json` — worktree 固有の上書き(`--show-toplevel`)
+   3. `$PWD/.cursor.json` — 非 git フォールバック / サブディレクトリ起動時の最寄り
+4. `$CURSOR_DELEGATE_PROJECT_CONFIG` — 明示指定パス(**最優先**)
 
-3 レイヤとも同じ `.cursor.json` 形式(deep-merge、後勝ち)。
+各レイヤとも同じ `.cursor.json` 形式(deep-merge、後勝ち)。
+
+**git worktree**: プロジェクト設定は素の `$PWD` ではなく git リポジトリに紐づけて
+解決されます。よって本チェックアウトに commit した(あるいは非追跡で置いた)設定は
+どのリンク worktree からも読まれ、worktree 側はルート直下の `.cursor.json` で
+上書きできます。git は**ソフト依存**で、git 作業ツリー外(または git 未インストール)
+では project レイヤは単に `$PWD/.cursor.json`(従来挙動)。ルートで起動した通常の
+チェックアウトでは 3.1〜3.3 は同一ファイルに畳まれます。
 
 マージ結果は **JOB_ID ごと** に
 `.cursor/delegate/state/resolved-config-<JOB_ID>.json` にスナップショット
-されます — 共有パスなし、ジョブ間の TOCTOU なし。
+されます — 共有パスなし、ジョブ間の TOCTOU なし。state は `$PWD` 相対のままなので
+各 worktree は自分専用の実行時 state を持ちます。
 
 ### スキーマ(`.cursor.json`)
 
@@ -634,6 +649,15 @@ executor 実行 + ralplan コンセンサスループ。以降のメンテナン
 
 ## 変更履歴
 
+- **git worktree 対応のプロジェクト設定**(2026-07-03)— project レイヤを素の
+  `$PWD` ではなく git で解決:`<本チェックアウトのルート>/.cursor.json`(全 git
+  worktree で共有、`--git-common-dir`) < `<worktree ルート>/.cursor.json`
+  (`--show-toplevel`) < `$PWD/.cursor.json`。最上位に明示指定の脱出口
+  `$CURSOR_DELEGATE_PROJECT_CONFIG` を追加。worktree から本チェックアウト/非追跡の
+  project 設定が見えない問題と、リポジトリのサブディレクトリ起動でリポジトリ直下の
+  設定を取りこぼす問題を修正。git はソフト依存(非 git では従来の
+  `$PWD/.cursor.json` 挙動を厳密に維持)。パスは物理形に正規化するので通常の
+  チェックアウトは 1 レイヤに畳まれる。新規 `test_config_worktree.sh`、スイート 18/18。
 - **タスク別 `preamble`**(2026-06-27)— 同じ `.cursor.json` 内に置けるタスク
   固有プロンプト。`string` または文字列配列(`\n` 連結)。`{{prompt}}` プレース
   ホルダが在ればその位置にユーザープロンプトを差し込み、無ければ `\n\n---\n\n`
