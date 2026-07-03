@@ -66,7 +66,7 @@ CURSOR_DELEGATE_LOCAL_PARALLEL=1 bash lib/fanout.sh review:lib/lib_common.sh rev
 ### Setup
 
 1. Ensure `CURSOR_API_KEY` is set or `agent login` has been run.
-2. Have a terminal open in the project root (where `.omc/` will be written).
+2. Have a terminal open in the project root (where `.cursor/delegate/` will be written).
 
 ### Execution
 

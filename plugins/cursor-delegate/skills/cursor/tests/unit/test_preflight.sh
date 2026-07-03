@@ -38,13 +38,13 @@ FAKE_BIN="${TMPDIR_TEST}/bin"
 mkdir -p "${FAKE_HOME}/.cursor" "${FAKE_CWD}" "${FAKE_BIN}"
 cd "${FAKE_CWD}"
 
-# Create .omc dirs so cd_output_dir / cd_state_dir succeed without agent.
+# Create .cursor/delegate dirs so cd_output_dir / cd_state_dir succeed without agent.
 mkdir -p "${FAKE_CWD}/.cursor/delegate" "${FAKE_CWD}/.cursor/delegate/state"
 
-# Fake model.json for config resolution (needed by sourcing lib_common).
+# Fake .cursor.json for config resolution (needed by sourcing lib_common).
 FAKE_SKILL_DIR="${TMPDIR_TEST}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {
@@ -73,11 +73,11 @@ run_preflight() {
 set -euo pipefail
 export HOME="${fake_home}"
 ${cursor_api:+export CURSOR_API_KEY="${cursor_api}"}
-export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 export CD_USER_CONFIG="${fake_home}/.cursor.json"
 export CD_PROJECT_CONFIG=".cursor.json"
 source "${LIB_COMMON}"
-CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 cd_preflight "${task}" "${model}"
 EOF
   )"
@@ -190,9 +190,9 @@ set +e
 (
   unset CURSOR_API_KEY 2>/dev/null || true
   PATH="${FAKE_BIN}:${PATH}" HOME="${EMPTY_HOME}" \
-  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json" \
+  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json" \
   CD_USER_CONFIG="${EMPTY_HOME}/.cursor.json" \
-  bash -c "source '${LIB_COMMON}'; CD_SKILL_CONFIG='${FAKE_SKILL_DIR}/config/model.json'; cd_preflight review good-model"
+  bash -c "source '${LIB_COMMON}'; CD_SKILL_CONFIG='${FAKE_SKILL_DIR}/config/.cursor.json'; cd_preflight review good-model"
 ) 2>/dev/null
 EC=$?
 set -e

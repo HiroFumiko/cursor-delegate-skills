@@ -26,7 +26,7 @@ cd "${FAKE_CWD}"
 
 FAKE_SKILL="${TMPDIR_TEST}/skill"
 setup_fake_skill_dir "${FAKE_SKILL}"
-export CD_SKILL_CONFIG="${FAKE_SKILL}/config/model.json"
+export CD_SKILL_CONFIG="${FAKE_SKILL}/config/.cursor.json"
 export CD_USER_CONFIG="${HOME}/.cursor.json"
 source "${LIB_COMMON}"
 

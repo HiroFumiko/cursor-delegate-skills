@@ -1,8 +1,8 @@
 {
   "name": "cursor-delegate",
-  "description": "Delegate implement/review/plan/investigate/security tasks to Cursor CLI (agent) from Claude Code. Bundles the `cursor` delegation skill (parallel fanout, resume/status/cancel, per-task preamble) and the `cursor-setup` cross-platform readiness doctor.",
+  "description": "Delegate implement/review/plan/investigate/security tasks to Cursor CLI (agent) from Claude Code. Bundles the `cursor` delegation skill (parallel fanout, resume/status/cancel, per-task preamble), the `cursor-setup` cross-platform readiness doctor, and `cursor-ide` to launch the Cursor IDE (GUI) at a natural-language directory.",
   "author": {
     "name": "HiroFumiko"
   },
-  "keywords": ["cursor", "delegation", "code-review", "agent", "fanout", "claude-code"]
+  "keywords": ["cursor", "delegation", "code-review", "agent", "fanout", "claude-code", "ide", "launch"]
 }

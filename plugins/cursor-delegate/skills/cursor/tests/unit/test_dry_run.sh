@@ -51,10 +51,10 @@ mkdir -p "${FAKE_HOME}/.cursor" "${FAKE_CWD}" "${FAKE_BIN}"
 mkdir -p "${FAKE_CWD}/.cursor/delegate" "${FAKE_CWD}/.cursor/delegate/state"
 cd "${FAKE_CWD}"
 
-# Fake model.json (self-contained; model never validated against a real CLI).
+# Fake .cursor.json (self-contained; model never validated against a real CLI).
 FAKE_SKILL_DIR="${TMPDIR_TEST}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {
@@ -84,7 +84,7 @@ COMMON_ENV=(
   HOME="${FAKE_HOME}"
   CURSOR_API_KEY="fake-key"
   FAKE_AGENT_MODELS="good-model"$'\n'"composer-2"
-  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
   CD_USER_CONFIG="${FAKE_HOME}/.cursor.json"
   CD_PROJECT_CONFIG=".cursor.json"
 )

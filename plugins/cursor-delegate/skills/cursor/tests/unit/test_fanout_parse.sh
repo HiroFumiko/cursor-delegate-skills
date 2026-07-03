@@ -41,10 +41,10 @@ FAKE_CWD="${TMPDIR_TEST}/project"
 mkdir -p "${FAKE_CWD}/.cursor/delegate" "${FAKE_CWD}/.cursor/delegate/state"
 cd "${FAKE_CWD}"
 
-# Provide a minimal model.json so cd_state_dir/cd_output_dir work if called.
+# Provide a minimal .cursor.json so cd_state_dir/cd_output_dir work if called.
 FAKE_SKILL_DIR="${TMPDIR_TEST}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {
@@ -60,13 +60,13 @@ cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
 EOF
 
 # Source lib_common first (required by fanout.sh functions).
-export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 export CD_USER_CONFIG="${HOME}/.cursor.json"
 export CD_PROJECT_CONFIG=".cursor.json"
 
 # shellcheck source=../../lib/lib_common.sh
 source "${LIB_COMMON}"
-CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 
 # Source only the three helper functions from fanout.sh, not the main()
 # entrypoint.  fanout.sh ends with `main "$@"` which would exit 64 if sourced

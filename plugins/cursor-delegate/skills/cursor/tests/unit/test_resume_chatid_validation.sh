@@ -32,7 +32,7 @@ run_resume() {
   PATH="${FAKE_BIN}:${PATH}" HOME="${FAKE_HOME}" \
     CURSOR_API_KEY="fake-key" \
     CURSOR_DELEGATE_QUARANTINE_HOOKS=0 \
-    CD_SKILL_CONFIG="${FAKE_SKILL}/config/model.json" \
+    CD_SKILL_CONFIG="${FAKE_SKILL}/config/.cursor.json" \
     CD_USER_CONFIG="${FAKE_HOME}/.cursor.json" \
     bash "${RESUME_SH}" "${chat_id}" "${prompt}" 2>/dev/null
 }

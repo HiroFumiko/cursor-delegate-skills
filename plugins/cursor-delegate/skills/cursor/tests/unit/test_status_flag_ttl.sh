@@ -62,7 +62,7 @@ EOF
 run_status() {
   PATH="${FAKE_BIN}:${PATH}" HOME="${FAKE_HOME}" \
     CURSOR_API_KEY="fake-key" \
-    CD_SKILL_CONFIG="${FAKE_SKILL}/config/model.json" \
+    CD_SKILL_CONFIG="${FAKE_SKILL}/config/.cursor.json" \
     CD_USER_CONFIG="${FAKE_HOME}/.cursor.json" \
     bash "${STATUS_SH}" --since 365d 2>&1
 }

@@ -42,7 +42,7 @@ cd "${FAKE_CWD}"
 
 FAKE_SKILL_DIR="${TMPDIR_TEST}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {
@@ -102,7 +102,7 @@ EOF
 
 run_status() {
   HOME="${HOME}" \
-  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json" \
+  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json" \
   CD_USER_CONFIG="${HOME}/.cursor.json" \
   bash "${STATUS_SH}" "$@" 2>/dev/null
 }

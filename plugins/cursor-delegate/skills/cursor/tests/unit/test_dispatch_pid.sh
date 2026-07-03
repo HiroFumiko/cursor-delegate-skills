@@ -47,14 +47,14 @@ export HOME="${TMPROOT}/home"
 mkdir -p "${HOME}"
 
 # Redirect the skill's resolved config to use this temp area by cding into
-# a temp project root with a fresh .omc/ layout.
+# a temp project root with a fresh .cursor/delegate/ layout.
 export PATH="${FAKE_BIN}:${PATH}"
 export CURSOR_DELEGATE_QUARANTINE_HOOKS=0   # No hooks file to quarantine
 export CURSOR_API_KEY="${CURSOR_API_KEY:-test-fake-key}"
-# Use a fake model.json whose models match the fake agent's --list-models output.
+# Use a fake .cursor.json whose models match the fake agent's --list-models output.
 FAKE_SKILL_DIR="${TMPROOT}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'MODELEOF'
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'MODELEOF'
 {
   "version": 1,
   "defaults": {
@@ -68,7 +68,7 @@ cat >"${FAKE_SKILL_DIR}/config/model.json" <<'MODELEOF'
   "timeout_sec": 590
 }
 MODELEOF
-export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 export CD_USER_CONFIG="${HOME}/.cursor.json"
 WORKDIR="${TMPROOT}/work"
 mkdir -p "${WORKDIR}"

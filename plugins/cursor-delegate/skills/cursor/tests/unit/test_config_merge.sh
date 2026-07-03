@@ -39,7 +39,7 @@ trap 'rm -rf "${TMPDIR_TEST}"' EXIT INT TERM
 export HOME="${TMPDIR_TEST}/home"
 mkdir -p "${HOME}/.cursor"
 
-# Fake CWD inside tmpdir (for project config + .omc dirs).
+# Fake CWD inside tmpdir (for project config + .cursor/delegate dirs).
 FAKE_CWD="${TMPDIR_TEST}/project"
 mkdir -p "${FAKE_CWD}"
 cd "${FAKE_CWD}"
@@ -48,8 +48,8 @@ cd "${FAKE_CWD}"
 FAKE_SKILL_DIR="${TMPDIR_TEST}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
 
-# Write skill-level model.json (lowest precedence).
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
+# Write skill-level .cursor.json (lowest precedence).
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {
@@ -91,7 +91,7 @@ EOF
 source "${LIB_COMMON}"
 
 # Override the config path to use our fake skill config.
-CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 CD_USER_CONFIG="${HOME}/.cursor.json"
 CD_PROJECT_CONFIG=".cursor.json"
 export CD_SKILL_CONFIG CD_USER_CONFIG CD_PROJECT_CONFIG

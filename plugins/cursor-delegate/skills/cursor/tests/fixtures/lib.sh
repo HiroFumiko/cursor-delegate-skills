@@ -7,7 +7,7 @@
 #
 # Provides:
 #   _FX_PASS / _FX_FAIL counters + pass/fail helpers
-#   setup_fake_skill_dir DIR     — writes a default model.json
+#   setup_fake_skill_dir DIR     — writes a default .cursor.json
 #   setup_fake_home DIR          — creates ~/.cursor skeleton
 #   setup_fake_cwd DIR           — creates .cursor/delegate/state
 #   install_fake_agent BIN_DIR   — copies fake-agent.sh as BIN_DIR/agent + links jq/timeout
@@ -26,7 +26,7 @@ _FX_FIXTURES_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 setup_fake_skill_dir() {
   local dir="${1:?dir required}"
   mkdir -p "${dir}/config"
-  cat >"${dir}/config/model.json" <<'EOF'
+  cat >"${dir}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {

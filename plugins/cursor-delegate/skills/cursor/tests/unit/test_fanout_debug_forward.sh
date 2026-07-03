@@ -53,7 +53,7 @@ cd "${FAKE_CWD}"
 
 FAKE_SKILL_DIR="${TMPDIR_TEST}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {
@@ -70,7 +70,7 @@ EOF
 
 COMMON_ENV=(
   HOME="${FAKE_HOME}"
-  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+  CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
   CD_USER_CONFIG="${FAKE_HOME}/.cursor.json"
   CD_PROJECT_CONFIG=".cursor.json"
   CURSOR_DELEGATE_FORCE_CLAUDE=1   # never auto-flip to local-parallel

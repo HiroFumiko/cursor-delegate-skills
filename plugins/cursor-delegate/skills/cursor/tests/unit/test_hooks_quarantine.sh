@@ -42,7 +42,7 @@ cd "${FAKE_CWD}"
 
 FAKE_SKILL_DIR="${TMPDIR_TEST}/skill"
 mkdir -p "${FAKE_SKILL_DIR}/config"
-cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
+cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 {
   "version": 1,
   "defaults": {
@@ -53,7 +53,7 @@ cat >"${FAKE_SKILL_DIR}/config/model.json" <<'EOF'
 }
 EOF
 
-export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 export CD_USER_CONFIG="${HOME}/.cursor.json"
 export CD_PROJECT_CONFIG=".cursor.json"
 export CURSOR_DELEGATE_QUARANTINE_HOOKS="1"
@@ -62,7 +62,7 @@ export CURSOR_DELEGATE_QUARANTINE_HOOKS="1"
 source "${LIB_COMMON}"
 
 # Override the path variables that lib_common set from BASH_SOURCE.
-CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/model.json"
+CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 CD_HOOKS_FILE="${HOOKS_FILE}"
 CD_HOOKS_BAK="${HOOKS_BAK}"
 
