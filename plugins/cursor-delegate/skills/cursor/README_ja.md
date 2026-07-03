@@ -67,7 +67,7 @@ CHAT_ID=$(/cursor resume --create-chat)
 
 両方とも無い場合、pre-flight が exit 2 で停止します。
 
-> **`CURSOR_API_KEY` を `<repo>/.cursor.json` にコミットしないこと。**
+> **`CURSOR_API_KEY` を `~/.cursor.json` にコミットしないこと。**
 > このスキルは環境変数からのみ読み取り、ディスクに書きません。
 
 ### プラットフォーム別の注意
@@ -331,23 +331,13 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 
 優先度の低い順:
 
-1. `~/.claude/skills/cursor/config/.cursor.json` — スキル既定
-2. `~/.cursor.json` — ユーザ上書き
-3. **プロジェクト** — git で解決:
-   1. `<本チェックアウトのルート>/.cursor.json` — 全 git worktree で共有
-      (`git rev-parse --git-common-dir`)
-   2. `<現在の worktree ルート>/.cursor.json` — worktree 固有の上書き(`--show-toplevel`)
-   3. `$PWD/.cursor.json` — 非 git フォールバック / サブディレクトリ起動時の最寄り
-4. `$CURSOR_DELEGATE_PROJECT_CONFIG` — 明示指定パス(**最優先**)
+1. `~/.claude/skills/cursor/config/.cursor.json` — スキル既定(同梱、編集不可)
+2. `~/.cursor.json` — ユーザ上書き。このユーザーの全リポジトリに適用されます。
 
-各レイヤとも同じ `.cursor.json` 形式(deep-merge、後勝ち)。
-
-**git worktree**: プロジェクト設定は素の `$PWD` ではなく git リポジトリに紐づけて
-解決されます。よって本チェックアウトに commit した(あるいは非追跡で置いた)設定は
-どのリンク worktree からも読まれ、worktree 側はルート直下の `.cursor.json` で
-上書きできます。git は**ソフト依存**で、git 作業ツリー外(または git 未インストール)
-では project レイヤは単に `$PWD/.cursor.json`(従来挙動)。ルートで起動した通常の
-チェックアウトでは 3.1〜3.3 は同一ファイルに畳まれます。
+各レイヤとも同じ `.cursor.json` 形式(deep-merge、後勝ち)。設定は 2 層のみで、
+プロジェクト単位 / リポジトリ単位 / worktree 単位の設定ファイルは存在しません。
+スキルは作業ディレクトリ・リポジトリルート・git worktree から `.cursor.json` を
+読み取ることはなく、プロジェクトスコープは非対応です。
 
 マージ結果は **JOB_ID ごと** に
 `.cursor/delegate/state/resolved-config-<JOB_ID>.json` にスナップショット
@@ -373,7 +363,7 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 }
 ```
 
-プロジェクト上書き例(`<repo>/.cursor.json`):
+ユーザー上書き例(`~/.cursor.json`):
 ```json
 {"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}
 ```
@@ -381,9 +371,9 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 全フィールドに注釈を付けたコピペ用リファレンスが
 [`config/.cursor.example.json`](config/.cursor.example.json) にあります。`//`
 コメントを除去し、上書きしたいキーだけを残してください。すぐ使える設定を自動生成
-するなら `bash lib/setup.sh --init-config user|project` を使います。これは同梱
-デフォルトのコピーを書き出すので、その場で値を編集できます(完全コピーは値を固定
-するため、デフォルト追従に戻したいフィールドは削除してください)。
+するなら `bash lib/setup.sh --init-config` を使います。これは同梱デフォルトの
+コピーを `~/.cursor.json` に書き出すので、その場で値を編集できます(完全コピーは
+値を固定するため、デフォルト追従に戻したいフィールドは削除してください)。
 
 既定の `auto` は Cursor がモデルを自動選択します。特定モデルに固定する場合は
 `agent --list-models`(`auto` 自体も一覧に含まれます)の名前を使用してください。
@@ -596,8 +586,8 @@ CHAT_ID=$(/cursor resume --create-chat)
 # 自動分割: Cursor がレビュー担当、Claude がアーキテクチャ判断
 # (自動トリガまたは /cursor orchestrate で明示起動)
 
-# プロジェクト単位で review モデルを上書き
-echo '{"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}' > .cursor.json
+# ユーザー単位で review モデルを上書き
+echo '{"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}' > ~/.cursor.json
 
 # ユニットテスト実行
 bash ~/.claude/skills/cursor/tests/run.sh unit
@@ -649,15 +639,6 @@ executor 実行 + ralplan コンセンサスループ。以降のメンテナン
 
 ## 変更履歴
 
-- **git worktree 対応のプロジェクト設定**(2026-07-03)— project レイヤを素の
-  `$PWD` ではなく git で解決:`<本チェックアウトのルート>/.cursor.json`(全 git
-  worktree で共有、`--git-common-dir`) < `<worktree ルート>/.cursor.json`
-  (`--show-toplevel`) < `$PWD/.cursor.json`。最上位に明示指定の脱出口
-  `$CURSOR_DELEGATE_PROJECT_CONFIG` を追加。worktree から本チェックアウト/非追跡の
-  project 設定が見えない問題と、リポジトリのサブディレクトリ起動でリポジトリ直下の
-  設定を取りこぼす問題を修正。git はソフト依存(非 git では従来の
-  `$PWD/.cursor.json` 挙動を厳密に維持)。パスは物理形に正規化するので通常の
-  チェックアウトは 1 レイヤに畳まれる。新規 `test_config_worktree.sh`、スイート 18/18。
 - **タスク別 `preamble`**(2026-06-27)— 同じ `.cursor.json` 内に置けるタスク
   固有プロンプト。`string` または文字列配列(`\n` 連結)。`{{prompt}}` プレース
   ホルダが在ればその位置にユーザープロンプトを差し込み、無ければ `\n\n---\n\n`

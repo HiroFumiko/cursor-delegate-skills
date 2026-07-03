@@ -55,7 +55,6 @@ EOF
 
 export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 export CD_USER_CONFIG="${HOME}/.cursor.json"
-export CD_PROJECT_CONFIG=".cursor.json"
 export CURSOR_DELEGATE_QUARANTINE_HOOKS="1"
 
 # shellcheck source=../../lib/lib_common.sh

@@ -1,6 +1,6 @@
 ---
 name: cursor-setup
-description: Cross-platform readiness setup for the `cursor` delegation skill. Detects the host OS (WSL / Linux / macOS; native Windows is unsupported → WSL), checks every runtime dependency in one pass without spending Cursor tokens, generates the `~/.claude/settings.json` permission allowlist so read-only delegation runs without a prompt, and — once the verdict is READY — interactively seeds a ready-to-use `.cursor.json` (a copy of the shipped defaults) at user or project scope so routing tweaks live outside the plugin and survive marketplace updates. Triggers on "/cursor-setup", "cursor setup", "setup cursor", "cursor 環境構築", "cursorのセットアップ", "cursor doctor", or when the cursor skill fails a preflight check (missing agent/jq/timeout/auth).
+description: Cross-platform readiness setup for the `cursor` delegation skill. Detects the host OS (WSL / Linux / macOS; native Windows is unsupported → WSL), checks every runtime dependency in one pass without spending Cursor tokens, generates the `~/.claude/settings.json` permission allowlist so read-only delegation runs without a prompt, and — once the verdict is READY — interactively seeds a ready-to-use `~/.cursor.json` (a copy of the shipped defaults) so routing tweaks live outside the plugin and survive marketplace updates. Triggers on "/cursor-setup", "cursor setup", "setup cursor", "cursor 環境構築", "cursorのセットアップ", "cursor doctor", or when the cursor skill fails a preflight check (missing agent/jq/timeout/auth).
 level: 2
 version: 1.0.0
 ---
@@ -15,7 +15,7 @@ The heavy lifting lives in one bash engine:
 
 ```
 bash ${CLAUDE_PLUGIN_ROOT}/skills/cursor/lib/setup.sh \
-  [--check | --print-permissions | --apply-permissions | --init-config <user|project> [--force]]
+  [--check | --print-permissions | --apply-permissions | --init-config [--force]]
 ```
 
 `bash ${CLAUDE_PLUGIN_ROOT}/skills/cursor/lib/cursor.sh setup …` (alias `doctor`) routes to
@@ -70,19 +70,18 @@ the same script.
       (it edits the global `~/.claude/settings.json`, backing it up to
       `settings.json.cursor-setup.bak`).
 
-   b. **Seed a `.cursor.json` config** so the user's routing tweaks live
+   b. **Seed the `~/.cursor.json` config** so the user's routing tweaks live
       **outside** the plugin. Marketplace updates overwrite the skill default
-      (layer 1) but **never** `~/.cursor.json` or `<cwd>/.cursor.json` — that is
-      the whole point of writing an override. Use **AskUserQuestion** to ask
-      *where* to write it (header e.g. `Config scope`):
-      - **User scope** → `~/.cursor.json` (applies to every repo for this user).
-      - **Project scope** → `<cwd>/.cursor.json` (applies to this repo only; can
-        be committed so the team shares it).
+      (layer 1) but **never** `~/.cursor.json` — that is the whole point of
+      writing an override. Config is **user-scoped only** (applies to every repo
+      for this user); there is no per-project config file. Use **AskUserQuestion**
+      to ask whether to seed it (header e.g. `Seed config`):
+      - **Yes** → write `~/.cursor.json` (a ready-to-use copy of the defaults).
       - **Skip** → keep using the built-in skill default (no file written).
 
-      On a non-skip choice, run:
+      On *yes*, run:
       ```
-      bash ${CLAUDE_PLUGIN_ROOT}/skills/cursor/lib/setup.sh --init-config <user|project>
+      bash ${CLAUDE_PLUGIN_ROOT}/skills/cursor/lib/setup.sh --init-config
       ```
       The file is a **ready-to-use copy of the shipped defaults** — it already
       holds real values (models, modes, preambles) the user can edit in place,
@@ -96,7 +95,7 @@ the same script.
         [`configuration.md`](../cursor/references/configuration.md).
       - stdout `EXISTS\t<path>` → the file already exists. Ask via
         **AskUserQuestion** whether to overwrite; only on *yes* re-run with
-        `--init-config <scope> --force` (the old file is backed up to
+        `--init-config --force` (the old file is backed up to
         `<path>.cursor-setup.bak`).
 
 4. **Confirm**: optionally re-run `bash …/setup.sh` and show the verdict is
@@ -107,12 +106,11 @@ the same script.
 - `--check` is the default and is purely diagnostic (read-only; never invokes
   `agent`). Exit code: `0` ready, `1` needs setup.
 - `--apply-permissions` and `--init-config` are the mutating modes — always
-  confirm with the user first (the AskUserQuestion in step 3b covers the config
-  scope choice). `--apply-permissions` writes `~/.claude/settings.json`;
-  `--init-config <scope>` writes a ready-to-use copy of the shipped defaults
-  to `~/.cursor.json` or `<cwd>/.cursor.json` and
-  **never overwrites** an existing file unless `--force` (which backs the old one
-  up to `<path>.cursor-setup.bak`). `.cursor.json` must **never** contain a
-  `CURSOR_API_KEY` — keep secrets in the environment.
+  confirm with the user first (the AskUserQuestion in step 3b covers whether to
+  seed the config). `--apply-permissions` writes `~/.claude/settings.json`;
+  `--init-config` writes a ready-to-use copy of the shipped defaults to
+  `~/.cursor.json` and **never overwrites** an existing file unless `--force`
+  (which backs the old one up to `<path>.cursor-setup.bak`). `.cursor.json` must
+  **never** contain a `CURSOR_API_KEY` — keep secrets in the environment.
 - After setup, drive real work through the [`cursor`](../cursor/SKILL.md) skill
   (`/cursor review …`, `/cursor fanout …`, etc.).

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # test_config_merge.sh — unit test for cd_resolve_config:
 #   - per-JOB snapshot naming
-#   - project > user > skill-default precedence
+#   - user > skill-default precedence (config is user-scoped only; no project layer)
 #
 # Requires: jq
 # Exit 0 = PASS, non-zero = FAIL
@@ -39,7 +39,7 @@ trap 'rm -rf "${TMPDIR_TEST}"' EXIT INT TERM
 export HOME="${TMPDIR_TEST}/home"
 mkdir -p "${HOME}/.cursor"
 
-# Fake CWD inside tmpdir (for project config + .cursor/delegate dirs).
+# Fake CWD inside tmpdir (only for the $PWD-relative .cursor/delegate state dir).
 FAKE_CWD="${TMPDIR_TEST}/project"
 mkdir -p "${FAKE_CWD}"
 cd "${FAKE_CWD}"
@@ -64,20 +64,11 @@ cat >"${FAKE_SKILL_DIR}/config/.cursor.json" <<'EOF'
 }
 EOF
 
-# Write user-level override (mid precedence): overrides review model.
+# Write user-level override (highest precedence): overrides review model.
 cat >"${HOME}/.cursor.json" <<'EOF'
 {
   "defaults": {
     "review": { "model": "user-override-model" }
-  }
-}
-EOF
-
-# Write project-level override (highest precedence): overrides review model again.
-cat >"${FAKE_CWD}/.cursor.json" <<'EOF'
-{
-  "defaults": {
-    "review": { "model": "project-override-model" }
   }
 }
 EOF
@@ -93,8 +84,7 @@ source "${LIB_COMMON}"
 # Override the config path to use our fake skill config.
 CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 CD_USER_CONFIG="${HOME}/.cursor.json"
-CD_PROJECT_CONFIG=".cursor.json"
-export CD_SKILL_CONFIG CD_USER_CONFIG CD_PROJECT_CONFIG
+export CD_SKILL_CONFIG CD_USER_CONFIG
 
 # ---- Test 1: per-JOB snapshot naming ----------------------------------------
 
@@ -114,57 +104,38 @@ else
   fail "snapshot file exists" "path not found: ${SNAP_PATH}"
 fi
 
-# ---- Test 2: project override wins over user override -----------------------
+# ---- Test 2: user override wins over skill default --------------------------
 
 REVIEW_MODEL="$(jq -r '.defaults.review.model' "${SNAP_PATH}")"
-if [[ "${REVIEW_MODEL}" == "project-override-model" ]]; then
-  pass "project override wins (review.model = project-override-model)"
+if [[ "${REVIEW_MODEL}" == "user-override-model" ]]; then
+  pass "user override wins (review.model = user-override-model)"
 else
-  fail "project override wins" "got: ${REVIEW_MODEL}"
+  fail "user override wins" "got: ${REVIEW_MODEL}"
 fi
 
-# ---- Test 3: user override visible when project does NOT override -----------
+# ---- Test 3: skill default shows through for keys the user does NOT override -
 
-# Create a new project config that does NOT override security.
-cat >"${FAKE_CWD}/.cursor.json" <<'EOF'
-{
-  "defaults": {
-    "review": { "model": "project-override-model" }
-  }
-}
-EOF
-
-# User config overrides security model.
-cat >"${HOME}/.cursor.json" <<'EOF'
-{
-  "defaults": {
-    "security": { "model": "user-security-model" }
-  }
-}
-EOF
-
+# The user config above only overrides review; security keeps the skill default.
 JOB2="test-job2-$(cd_rand 8)"
 SNAP2="$(cd_resolve_config security "${JOB2}")"
 
 SEC_MODEL="$(jq -r '.defaults.security.model' "${SNAP2}")"
-if [[ "${SEC_MODEL}" == "user-security-model" ]]; then
-  pass "user override wins when no project override (security.model = user-security-model)"
+if [[ "${SEC_MODEL}" == "gpt-5.4-high" ]]; then
+  pass "skill default shows through when user does not override (security.model = gpt-5.4-high)"
 else
-  fail "user override visible" "got: ${SEC_MODEL}"
+  fail "skill default passthrough" "got: ${SEC_MODEL}"
 fi
 
-# ---- Test 4: skill default wins when no user/project override ---------------
+# ---- Test 4: skill default wins when user config is empty -------------------
 
-# Empty user and project configs.
 echo '{}' >"${HOME}/.cursor.json"
-echo '{}' >"${FAKE_CWD}/.cursor.json"
 
 JOB3="test-job3-$(cd_rand 8)"
 SNAP3="$(cd_resolve_config implement "${JOB3}")"
 
 IMPL_MODEL="$(jq -r '.defaults.implement.model' "${SNAP3}")"
 if [[ "${IMPL_MODEL}" == "composer-2" ]]; then
-  pass "skill default wins when no overrides (implement.model = composer-2)"
+  pass "skill default wins when no override (implement.model = composer-2)"
 else
   fail "skill default wins" "got: ${IMPL_MODEL}"
 fi

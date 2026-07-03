@@ -66,7 +66,7 @@ One of the following must be in place **before** the first `/cursor` call:
 
 Pre-flight refuses to start (exit 2) if neither is present.
 
-> **Never** commit `CURSOR_API_KEY` to a project's `.cursor.json`. The skill
+> **Never** commit `CURSOR_API_KEY` to `~/.cursor.json`. The skill
 > reads it from the env only and never writes it to disk.
 
 ### Platform notes
@@ -196,8 +196,8 @@ After install, confirm the slash command resolves:
 # cursor v1.0.0
 ```
 
-Project-level overrides can live in `<repo>/.cursor.json` and ship with the
-codebase (see [Configuration](#configuration)).
+User-level overrides can live in `~/.cursor.json` and apply across every
+repo for that user (see [Configuration](#configuration)).
 
 ---
 
@@ -358,24 +358,15 @@ merged automatically** — the caller reviews the diff and decides.
 
 Layers in ascending precedence:
 
-1. `~/.claude/skills/cursor/config/.cursor.json` — skill default
-2. `~/.cursor.json` — user override
-3. **project** — discovered via git:
-   1. `<main-checkout-root>/.cursor.json` — shared across all git worktrees
-      (via `git rev-parse --git-common-dir`)
-   2. `<worktree-root>/.cursor.json` — per-worktree override (`--show-toplevel`)
-   3. `$PWD/.cursor.json` — non-git fallback / closest config on subdir start
-4. `$CURSOR_DELEGATE_PROJECT_CONFIG` — explicit override path (**highest**)
+1. `~/.claude/skills/cursor/config/.cursor.json` — skill default (shipped;
+   do not edit)
+2. `~/.cursor.json` — user override, applies to every repo for this user
+   (**highest**)
 
-All layers share the same `.cursor.json` shape (deep-merged, last wins).
-
-**git worktrees:** the project config is anchored to the git repo, not a bare
-`$PWD`, so a config committed to — or living untracked in — the main checkout is
-picked up from every linked worktree, and a worktree can override it with its
-own root-level `.cursor.json`. git is a **soft dependency**: outside a git work
-tree (or with `git` not installed) the project layer is simply
-`$PWD/.cursor.json` — the historical behavior. A plain checkout started at its
-root collapses layers 3.1–3.3 to a single file.
+Both layers share the same `.cursor.json` shape (deep-merged, last wins).
+There is no per-project / per-repo / per-worktree config file — the skill
+never reads a `.cursor.json` from the working directory, the repo root, or a
+git worktree.
 
 The merged result is snapshotted **per JOB_ID** to
 `.cursor/delegate/state/resolved-config-<JOB_ID>.json` at invocation time —
@@ -401,7 +392,7 @@ worktree keeps its own runtime state.
 }
 ```
 
-Project override example (`<repo>/.cursor.json`):
+User override example (`~/.cursor.json`):
 ```json
 {"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}
 ```
@@ -409,9 +400,10 @@ Project override example (`<repo>/.cursor.json`):
 A fully annotated, copy-pasteable reference of every field lives in
 [`config/.cursor.example.json`](config/.cursor.example.json) — strip its `//`
 comments and keep only the keys you want to override. Or generate a ready-to-use
-config automatically: `bash lib/setup.sh --init-config user|project` writes a
-copy of the shipped defaults you can edit in place (a full copy pins those
-values, so delete any field you'd rather keep tracking the skill default).
+config automatically: `bash lib/setup.sh --init-config` writes a copy of the
+shipped defaults to `~/.cursor.json` you can edit in place (a full copy pins
+those values, so delete any field you'd rather keep tracking the skill
+default).
 
 The default `auto` lets Cursor pick. To pin a model, use a name from
 `agent --list-models` (which also lists `auto` itself).
@@ -626,8 +618,8 @@ CHAT_ID=$(/cursor resume --create-chat)
 # Auto-split: Cursor handles reviews, Claude handles architecture
 # (triggered automatically or via /cursor orchestrate)
 
-# Project-level review-model override
-echo '{"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}' > .cursor.json
+# User-level review-model override
+echo '{"defaults": {"review": {"model": "gpt-5.3-codex-high"}}}' > ~/.cursor.json
 
 # Run unit tests
 bash ~/.claude/skills/cursor/tests/run.sh unit
@@ -679,16 +671,6 @@ plus a ralplan consensus loop. Post-ship maintenance by the user.
 
 ## Changelog
 
-- **git worktree-aware project config** (2026-07-03) — the project layer is now
-  discovered via git instead of a bare `$PWD`: `<main-checkout-root>/.cursor.json`
-  (shared across all git worktrees, via `--git-common-dir`) <
-  `<worktree-root>/.cursor.json` (via `--show-toplevel`) < `$PWD/.cursor.json`,
-  with a new `$CURSOR_DELEGATE_PROJECT_CONFIG` explicit-override escape hatch at
-  the top. Fixes worktrees never seeing a main-checkout / untracked project
-  config, and repo-subdirectory starts missing the repo-root config. git is a
-  soft dependency (non-git dirs keep the exact `$PWD/.cursor.json` behavior);
-  paths canonicalize to physical form so a plain checkout de-dupes to one layer.
-  New `test_config_worktree.sh`; suite 18/18.
 - **Per-task `preamble`** (2026-06-27) — optional task-specific prompt kept in
   the same `.cursor.json`. A `string` or array-of-strings (joined with `\n`); a
   `{{prompt}}` placeholder marks where the user prompt is inserted, otherwise the

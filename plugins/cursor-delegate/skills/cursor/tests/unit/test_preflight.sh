@@ -75,7 +75,6 @@ export HOME="${fake_home}"
 ${cursor_api:+export CURSOR_API_KEY="${cursor_api}"}
 export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 export CD_USER_CONFIG="${fake_home}/.cursor.json"
-export CD_PROJECT_CONFIG=".cursor.json"
 source "${LIB_COMMON}"
 CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 cd_preflight "${task}" "${model}"

@@ -90,7 +90,6 @@ COMMON_ENV=(
   FAKE_AGENT_MODELS="good-model"
   CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
   CD_USER_CONFIG="${FAKE_HOME}/.cursor.json"
-  CD_PROJECT_CONFIG=".cursor.json"
 )
 
 # run_preview TASK PROMPT -> stdout = body of the "Final prompt preview" block.

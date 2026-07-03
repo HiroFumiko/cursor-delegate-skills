@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "cursor skill .cursor.json",
-  "description": "Routing config for the cursor skill (config/.cursor.json default; ~/.cursor.json user override; project override discovered via git at the repo root — shared across git worktrees — falling back to <cwd>/.cursor.json outside a repo). See README.md § CONFIGURATION.",
+  "description": "Routing config for the cursor skill (config/.cursor.json default, deep-merged under a ~/.cursor.json user override). See README.md § CONFIGURATION.",
   "type": "object",
   "required": ["version", "defaults"],
   "additionalProperties": false,

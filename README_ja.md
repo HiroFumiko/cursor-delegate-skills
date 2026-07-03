@@ -37,7 +37,7 @@
 
 - タスクタイプは `implement` / `review` / `plan` / `investigate` / `security` の 5 種類だけ。自由文から勝手に推測することはありません。
 - 並列実行(`fanout`)に加え、`resume` / `status` / `cancel`、そしてトークンを使わない `--dry-run` を備えています。
-- タスクごとに `preamble` を差し込んで役割を持たせられます。挙動は `.cursor.json` で決まるので(3 層の deep-merge)、いつ実行しても同じ結果になります。
+- タスクごとに `preamble` を差し込んで役割を持たせられます。挙動は `.cursor.json` で決まるので(2 層の deep-merge)、いつ実行しても同じ結果になります。
 - 読み取り専用のタスクは確認なしで実行し、ファイルを書き換える `implement` は必ず確認を挟みます。
 
 **準備側(`cursor-setup`)**
@@ -99,7 +99,7 @@ composer-2.5 - Composer 2.5
 固定したいタスクだけを、適用したい範囲に合うレイヤに書きます。
 
 ```jsonc
-// <repo>/.cursor.json — このプロジェクトに限って review と security を固定する例
+// ~/.cursor.json — このユーザーで review と security を固定する例
 {
   "defaults": {
     "review":   { "model": "gpt-5.3-codex-high" },
@@ -108,13 +108,12 @@ composer-2.5 - Composer 2.5
 }
 ```
 
-設定は次の 3 層を deep-merge し、下の層ほど優先されます。
+設定は次の 2 層を deep-merge し、下の層ほど優先されます。
 
 1. `${CLAUDE_PLUGIN_ROOT}/skills/cursor/config/.cursor.json` — プラグイン同梱の既定値
 2. `~/.cursor.json` — ユーザー全体の上書き
-3. `<cwd>/.cursor.json` — プロジェクト単位の上書き(リポジトリに commit すれば共有できます)
 
-マージは項目ごとに行われるので、`review.model` だけを書いた `<repo>/.cursor.json` でも、`mode` や `preamble`、`sandbox` といった他の項目は下の層の値がそのまま残ります。
+マージは項目ごとに行われるので、`review.model` だけを書いた `~/.cursor.json` でも、`mode` や `preamble`、`sandbox` といった他の項目は下の層の値がそのまま残ります。
 
 指定したモデルは、起動時に `agent --list-models` と照合されます。照合は行頭から一致を見るため、`composer-2` が `composer-2.5` に誤ってマッチすることはありません。一覧にない名前を書いた場合はその場で exit 3 で停止し、利用可能な候補を表示します。Cursor へは何も送られないので、タイプミスでトークンを無駄にする心配はありません。
 

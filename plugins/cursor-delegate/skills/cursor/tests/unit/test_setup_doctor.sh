@@ -156,30 +156,17 @@ else
   fail "init-config --force" "rc=${RC_FORCE} out=$(printf '%s' "${OUT_FORCE}" | tail -1)"
 fi
 
-# ---- Test 9: project scope writes <cwd>/.cursor.json ----
-PROJ_DIR="${TMPDIR_TEST}/proj"
-mkdir -p "${PROJ_DIR}"
+# ---- Test 9: removed 'project' scope + unknown args are usage errors (exit 64) ----
+# Project-scope config was removed; `--init-config` is now user-scope only, so a
+# leftover `project` token (and any other unknown arg) must be rejected.
 set +e
-OUT_PROJ="$( cd "${PROJ_DIR}" && env -u CURSOR_API_KEY HOME="${ICFG_HOME}" PATH="${FAKE_BIN}:${PATH}" \
-  bash "${SETUP_SH}" --init-config project 2>&1 )"; RC_PROJ=$?
+run_setup "${ICFG_HOME}" --init-config project >/dev/null 2>&1; RC_PROJ=$?
+run_setup "${ICFG_HOME}" --init-config bogus   >/dev/null 2>&1; RC_BADARG=$?
 set -e
-if [[ ${RC_PROJ} -eq 0 ]] \
-  && printf '%s' "${OUT_PROJ}" | grep -q "WROTE" \
-  && [[ -f "${PROJ_DIR}/.cursor.json" ]]; then
-  pass "init-config project: wrote <cwd>/.cursor.json"
+if [[ ${RC_PROJ} -eq 64 && ${RC_BADARG} -eq 64 ]]; then
+  pass "init-config: removed 'project' scope + unknown arg -> exit 64"
 else
-  fail "init-config project" "rc=${RC_PROJ} out=$(printf '%s' "${OUT_PROJ}" | tail -1)"
-fi
-
-# ---- Test 10: missing / bad scope is a usage error (exit 64) ----
-set +e
-run_setup "${ICFG_HOME}" --init-config >/dev/null 2>&1; RC_NOSCOPE=$?
-run_setup "${ICFG_HOME}" --init-config bogus >/dev/null 2>&1; RC_BADSCOPE=$?
-set -e
-if [[ ${RC_NOSCOPE} -eq 64 && ${RC_BADSCOPE} -eq 64 ]]; then
-  pass "init-config: missing/bad scope -> exit 64"
-else
-  fail "init-config scope guard" "noscope=${RC_NOSCOPE} badscope=${RC_BADSCOPE}"
+  fail "init-config arg guard" "project=${RC_PROJ} bogus=${RC_BADARG}"
 fi
 
 fx_summary "test_setup_doctor.sh"

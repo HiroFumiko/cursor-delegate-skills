@@ -62,7 +62,6 @@ EOF
 # Source lib_common first (required by fanout.sh functions).
 export CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json"
 export CD_USER_CONFIG="${HOME}/.cursor.json"
-export CD_PROJECT_CONFIG=".cursor.json"
 
 # shellcheck source=../../lib/lib_common.sh
 source "${LIB_COMMON}"

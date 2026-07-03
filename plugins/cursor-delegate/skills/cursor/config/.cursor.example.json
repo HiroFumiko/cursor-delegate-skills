@@ -2,28 +2,19 @@
 //
 // HOW TO USE THIS FILE
 //   This is a documented REFERENCE, not a live config. The skill never loads a
-//   `.cursor.example.json`. To apply settings, put a real `.cursor.json` at one
-//   of the override locations below and copy in ONLY the fields you want to
+//   `.cursor.example.json`. To apply settings, put a real `.cursor.json` at
+//   ~/.cursor.json (the user override) and copy in ONLY the fields you want to
 //   change — every untouched field keeps tracking the shipped skill default
 //   (and keeps receiving marketplace updates).
 //
 //   Strip the `//` comments before saving: a real `.cursor.json` must be strict
 //   JSON (the runtime parses it with `jq`, which rejects comments).
 //   Quick scaffold of a minimal override instead of hand-copying:
-//     bash skills/cursor/lib/setup.sh --init-config user      # ~/.cursor.json
-//     bash skills/cursor/lib/setup.sh --init-config project   # <repo>/.cursor.json
+//     bash skills/cursor/lib/setup.sh --init-config      # ~/.cursor.json
 //
 // FILE PRECEDENCE — deep-merged, last wins (ascending precedence):
 //   1. skills/cursor/config/.cursor.json  — skill default (shipped; do not edit)
 //   2. ~/.cursor.json                     — user override  (every repo, this user)
-//   3. project override (this repo; committable), discovered via git:
-//        a. <main-checkout-root>/.cursor.json — shared across all git worktrees
-//        b. <worktree-root>/.cursor.json      — per-worktree override
-//        c. <cwd>/.cursor.json                — non-git fallback / subdir-closest
-//   4. $CURSOR_DELEGATE_PROJECT_CONFIG    — explicit override path (highest)
-//   git is a soft dependency: outside a git work tree the project layer is just
-//   <cwd>/.cursor.json (the historical behavior). A plain checkout at its root
-//   collapses 3a/3b/3c to one file.
 //   Merge is a recursive object merge: a scalar or array in a deeper layer
 //   REPLACES the shallower one (arrays are not concatenated).
 //

@@ -91,7 +91,6 @@ PATH="${FAKE_BIN}:${PATH}" \
   CURSOR_DELEGATE_QUARANTINE_HOOKS="0" \
   CD_SKILL_CONFIG="${FAKE_SKILL_DIR}/config/.cursor.json" \
   CD_USER_CONFIG="${FAKE_HOME}/.cursor.json" \
-  CD_PROJECT_CONFIG=".cursor.json" \
   bash "${DISPATCH_SH}" review "test prompt for stdout contract" \
   >"${STDOUT_FILE}" 2>"${STDERR_FILE}"
 DISPATCH_EXIT=$?
