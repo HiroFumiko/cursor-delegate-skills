@@ -224,6 +224,13 @@ if [[ -f "${SUMMARY_BAD}" ]]; then
   else
     fail "malformed JSON frontmatter status" "expected malformed, got '${STATUS_BAD}'"
   fi
+  # Regression pin: the .err tail must be rendered under ## Errors.
+  if grep -q '## Errors' "${SUMMARY_BAD}" \
+    && grep -q 'fatal: crash' "${SUMMARY_BAD}"; then
+    pass "malformed JSON: .err tail rendered under ## Errors"
+  else
+    fail "malformed JSON errors section" "## Errors or err tail missing"
+  fi
 else
   fail "malformed JSON: summary file created" "file missing: ${SUMMARY_BAD}"
 fi
@@ -297,10 +304,13 @@ jq -n \
   }' >"${META_TO}"
 
 # No result line: only assistant progress + tool calls before the cutoff.
+# The trailing line is cut mid-event (as a SIGKILLed stream would be) and
+# must be skipped without breaking extraction.
 cat >"${RAW_TO}" <<'EOF'
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PARTIAL-PROGRESS-ALPHA"}]},"session_id":"sess-stream-partial"}
 {"type":"tool_call","subtype":"started","call_id":"c2","tool_call":{"shellToolCall":{"args":{"command":"rg bar src"}}},"session_id":"sess-stream-partial"}
 {"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PARTIAL-PROGRESS-BETA"}]},"session_id":"sess-stream-partial"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"CUT-MID-EV
 EOF
 : >"${ERR_TO}"
 
@@ -325,6 +335,47 @@ if grep -q 'rg bar src' "${SUMMARY_TO}" \
   pass "truncated stream: tool activity listed"
 else
   fail "truncated stream tool activity" "$(grep -A5 'Tool activity' "${SUMMARY_TO}" 2>/dev/null | head -8)"
+fi
+
+if ! grep -q 'CUT-MID-EV' "${SUMMARY_TO}"; then
+  pass "truncated stream: cut-mid-event line skipped"
+else
+  fail "truncated stream mid-event" "partial event fragment leaked into summary"
+fi
+
+# ---- Test 7b: single-event stream + timed_out -> partial path, not legacy --
+
+JOB_TS="test-sum-single-event"
+META_TS="${OUT_DIR}/${JOB_TS}.meta.json"
+RAW_TS="${OUT_DIR}/${JOB_TS}.json"
+SUMMARY_TS="${OUT_DIR}/${JOB_TS}.summary.md"
+
+jq -n \
+  --arg job_id "${JOB_TS}" \
+  '{
+    job_id:         $job_id,
+    task_type:      "review",
+    resolved_model: "auto",
+    mode:           "ask",
+    worktree:       "none",
+    session_id:     "sess-single",
+    pid:            42,
+    started_at:     "2026-04-24T06:00:00.000Z",
+    completed_at:   "2026-04-24T06:09:50.000Z",
+    duration_ms:    590000,
+    exit_code:      124,
+    status:         "timed_out"
+  }' >"${META_TS}"
+
+printf '{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"SINGLE-EVENT-PARTIAL"}]},"session_id":"sess-single"}\n' >"${RAW_TS}"
+
+bash "${SUMMARIZE_SH}" "${JOB_TS}" >/dev/null 2>/dev/null || true
+
+if grep -q '^status: timed_out$' "${SUMMARY_TS}" \
+  && grep -q 'SINGLE-EVENT-PARTIAL' "${SUMMARY_TS}"; then
+  pass "single-event stream: partial text kept, status timed_out"
+else
+  fail "single-event stream" "$(grep -E '^status:|SINGLE' "${SUMMARY_TS}" 2>/dev/null)"
 fi
 
 # ---- Test 8: empty raw output, meta timed_out -> stays timed_out ------------

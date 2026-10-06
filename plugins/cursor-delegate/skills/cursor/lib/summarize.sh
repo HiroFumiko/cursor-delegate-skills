@@ -79,7 +79,15 @@ FULL_RESULT=""
 # whole-file single-doc check needs slurp: exactly 1 JSON value == legacy
 # single-JSON; N>1 values (or slurp failure) == stream-json / garbage.
 SLURP_LEN="$(jq -s 'length' "${RAW}" 2>/dev/null || printf '')"
+IS_LEGACY="0"
 if [[ "${SLURP_LEN}" == "1" ]]; then
+  # Exactly one JSON value — legacy single-JSON doc, UNLESS it carries a
+  # .type field: a stream-json file with a single event also slurps to 1.
+  if jq -e 'has("type") | not' "${RAW}" >/dev/null 2>&1; then
+    IS_LEGACY="1"
+  fi
+fi
+if [[ "${IS_LEGACY}" == "1" ]]; then
   # Legacy single-JSON doc: extract whole-file.
   FULL_RESULT="$(jq -r '.result // empty' "${RAW}" 2>/dev/null || true)"
   RAW_ERROR="$(jq -r '.error // empty' "${RAW}" 2>/dev/null || true)"
@@ -126,12 +134,13 @@ if [[ -n "${FULL_RESULT}" ]]; then
   fi
 fi
 
-# V5: redact secrets from RAW_ERROR (always) and RESULT_TEXT (opt-in).
+# V5: redact secrets from RAW_ERROR (always), TOOL_SUMMARY (always — shell
+# commands embed credentials as readily as stderr), and RESULT_TEXT (opt-in).
 if [[ -n "${RAW_ERROR}" ]]; then
   RAW_ERROR="$(cd_redact_secrets <<<"${RAW_ERROR}")"
 fi
-if [[ "${CURSOR_DELEGATE_REDACT_RESULT:-0}" == "1" && -n "${RESULT_TEXT}" ]]; then
-  RESULT_TEXT="$(cd_redact_secrets <<<"${RESULT_TEXT}")"
+if [[ -n "${TOOL_SUMMARY}" ]]; then
+  TOOL_SUMMARY="$(cd_redact_secrets <<<"${TOOL_SUMMARY}")"
 fi
 
 # Absolute paths for artifacts section.
@@ -179,6 +188,11 @@ SUMMARY_ABS="${OUT_DIR_ABS}/${JOB_ID}.summary.md"
   if [[ -n "${TOOL_SUMMARY}" ]]; then
     printf '### Tool activity before cutoff\n\n'
     printf '```\n%s\n```\n\n' "${TOOL_SUMMARY}"
+  fi
+
+  if [[ -n "${RAW_ERROR}" ]]; then
+    printf '## Errors\n\n'
+    printf '```\n%s\n```\n\n' "${RAW_ERROR}"
   fi
 
   printf '## Artifacts\n\n'
