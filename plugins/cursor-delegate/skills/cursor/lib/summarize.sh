@@ -99,7 +99,10 @@ elif [[ -s "${RAW}" ]]; then
     if [[ -z "${FULL_RESULT}" ]]; then
       # Truncated stream: partial assistant text + tool-call overview.
       FULL_RESULT="$(jq -R -s -r "[${JQ_LINES} | select(.type == \"assistant\") | .message.content[]? | select(.type == \"text\") | .text // empty] | join(\"\n\")" "${RAW}" 2>/dev/null || true)"
-      TOOL_SUMMARY="$(jq -R -s -r "[${JQ_LINES} | select(.type == \"tool_call\" and .subtype == \"started\") | (.tool_call | keys[0] // \"unknown\") + (if (.tool_call.shellToolCall.args.command // \"\") != \"\" then \": \" + .tool_call.shellToolCall.args.command else \"\" end)] | unique | .[]" "${RAW}" 2>/dev/null || true)"
+      # Tool-call overview: distinct shell commands / tool kinds observed.
+      # Capped: a single command can embed a huge heredoc/patch; keep the
+      # summary one page (FULL_RESULT has its own 1500-char cap below).
+      TOOL_SUMMARY="$(jq -R -s -r "[${JQ_LINES} | select(.type == \"tool_call\" and .subtype == \"started\") | ((.tool_call | keys[0] // \"unknown\") + (if (.tool_call.shellToolCall.args.command // \"\") != \"\" then \": \" + .tool_call.shellToolCall.args.command else \"\" end) | .[0:200])] | unique | .[0:20] | .[]" "${RAW}" 2>/dev/null || true)"
       PARTIAL_NOTE="Agent output ended before the final result (exit ${EXIT_CODE}). Showing partial progress."
     fi
   else

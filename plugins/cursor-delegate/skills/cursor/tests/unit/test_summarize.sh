@@ -343,6 +343,46 @@ else
   fail "truncated stream mid-event" "partial event fragment leaked into summary"
 fi
 
+# ---- Test 7a: tool summary caps a huge embedded command --------------------
+
+JOB_TC="test-sum-toolcap"
+META_TC="${OUT_DIR}/${JOB_TC}.meta.json"
+RAW_TC="${OUT_DIR}/${JOB_TC}.json"
+SUMMARY_TC="${OUT_DIR}/${JOB_TC}.summary.md"
+
+jq -n \
+  --arg job_id "${JOB_TC}" \
+  '{
+    job_id:         $job_id,
+    task_type:      "review",
+    resolved_model: "auto",
+    mode:           "ask",
+    worktree:       "none",
+    session_id:     "sess-toolcap",
+    pid:            42,
+    started_at:     "2026-04-24T06:00:00.000Z",
+    completed_at:   "2026-04-24T06:09:50.000Z",
+    duration_ms:    590000,
+    exit_code:      124,
+    status:         "timed_out"
+  }' >"${META_TC}"
+
+# One tool_call whose command embeds a 5KB heredoc-like blob.
+BIG_CMD="do-stuff $(printf 'Z%.0s' $(seq 1 5000))"
+jq -c -R -s -n --arg cmd "${BIG_CMD}" \
+  '[{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PROG"}]},"session_id":"s"},
+    {"type":"tool_call","subtype":"started","call_id":"c","tool_call":{"shellToolCall":{"args":{"command": $cmd}}},"session_id":"s"}]
+   | .[]' >"${RAW_TC}"
+
+bash "${SUMMARIZE_SH}" "${JOB_TC}" >/dev/null 2>/dev/null || true
+
+TOOL_BYTES="$(awk '/^### Tool activity/{f=1;next} /^## [^#]/{f=0} f' "${SUMMARY_TC}" | wc -c | tr -d ' ')"
+if [[ "${TOOL_BYTES}" -lt 2000 ]] && grep -q 'do-stuff' "${SUMMARY_TC}"; then
+  pass "tool activity: huge command capped (${TOOL_BYTES}B)"
+else
+  fail "tool activity cap" "tool section is ${TOOL_BYTES}B"
+fi
+
 # ---- Test 7b: single-event stream + timed_out -> partial path, not legacy --
 
 JOB_TS="test-sum-single-event"
