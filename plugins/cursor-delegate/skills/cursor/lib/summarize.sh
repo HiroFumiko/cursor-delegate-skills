@@ -48,32 +48,81 @@ EXIT_CODE="$(     jq -r '.exit_code      // "null"'    "${META}")"
 META_STATUS="$(   jq -r '.status         // "unknown"' "${META}")"
 SESSION_ID="$(    jq -r '.session_id     // "none"'    "${META}")"
 
-# Attempt to extract result text from raw JSON; fall back on malformed/missing.
+# Attempt to extract result text from raw agent output; fall back on
+# malformed/missing.
+# Raw shapes:
+#   - legacy single-JSON doc (whole file parses with `jq -e .`, any
+#     formatting incl. pretty-printed pre-stream-json artifacts);
+#   - stream-json: 1 event per line, trailing `type=="result"` line holds
+#     .result / .error.
+#   - truncated stream (e.g. exit 124 timeout before the result line): no
+#     result line; concatenate `type=="assistant"` text as a partial result
+#     and list observed tool calls so the summary shows where time went.
+#     The trailing line may be cut mid-event — per-line `fromjson?` skips it.
+# Status note: a missing result line NEVER forces `malformed` — the meta
+# status (e.g. `timed_out` from dispatch's LAST_STATUS) stays authoritative.
+# `malformed` is only for content that is present but unparseable as JSONL.
 STATUS="${META_STATUS}"
 RESULT_TEXT=""
 RAW_ERROR=""
+PARTIAL_NOTE=""
+TOOL_SUMMARY=""
 
-if [[ -f "${RAW}" ]] && jq -e . "${RAW}" >/dev/null 2>&1; then
-  # Truncate to first ~1500 chars; if we trim, append last 300 chars as TAIL.
-  # jq -r emits raw string; head -c is byte-based, which is fine for our budget.
+# NOTE: `jq -R -s` slurps the whole file into ONE string, so per-line events
+# must be split first — `fromjson?` on the slurped blob always fails on
+# multi-line streams.
+JQ_LINES='split("\n")[] | select(length > 0) | fromjson? // empty'
+RESULT_SEL='select((.type // "result") == "result")'
+
+FULL_RESULT=""
+# NOTE: `jq -e .` succeeds on JSONL (reads only the first object), so a
+# whole-file single-doc check needs slurp: exactly 1 JSON value == legacy
+# single-JSON; N>1 values (or slurp failure) == stream-json / garbage.
+SLURP_LEN="$(jq -s 'length' "${RAW}" 2>/dev/null || printf '')"
+if [[ "${SLURP_LEN}" == "1" ]]; then
+  # Legacy single-JSON doc: extract whole-file.
   FULL_RESULT="$(jq -r '.result // empty' "${RAW}" 2>/dev/null || true)"
-  if [[ -n "${FULL_RESULT}" ]]; then
-    FULL_LEN=${#FULL_RESULT}
-    if (( FULL_LEN > 1500 )); then
-      HEAD_PART="${FULL_RESULT:0:1500}"
-      TAIL_PART="${FULL_RESULT: -300}"
-      RESULT_TEXT=$'\n'"${HEAD_PART}"$'\n\n...[truncated; len='"${FULL_LEN}"']...\n\n[TAIL]\n'"${TAIL_PART}"
-    else
-      RESULT_TEXT=$'\n'"${FULL_RESULT}"
+  RAW_ERROR="$(jq -r '.error // empty' "${RAW}" 2>/dev/null || true)"
+elif [[ -s "${RAW}" ]]; then
+  PARSED_COUNT="$(jq -R -s "[${JQ_LINES}] | length" "${RAW}" 2>/dev/null || printf '0')"
+  if [[ "${PARSED_COUNT}" =~ ^[0-9]+$ ]] && (( PARSED_COUNT > 0 )); then
+    FULL_RESULT="$(jq -R -s -r "[${JQ_LINES} | ${RESULT_SEL} | .result // empty] | last // empty" "${RAW}" 2>/dev/null || true)"
+    RAW_ERROR="$(jq -R -s -r "[${JQ_LINES} | ${RESULT_SEL} | .error // empty] | last // empty" "${RAW}" 2>/dev/null || true)"
+    if [[ -z "${FULL_RESULT}" ]]; then
+      # Truncated stream: partial assistant text + tool-call overview.
+      FULL_RESULT="$(jq -R -s -r "[${JQ_LINES} | select(.type == \"assistant\") | .message.content[]? | select(.type == \"text\") | .text // empty] | join(\"\n\")" "${RAW}" 2>/dev/null || true)"
+      TOOL_SUMMARY="$(jq -R -s -r "[${JQ_LINES} | select(.type == \"tool_call\" and .subtype == \"started\") | (.tool_call | keys[0] // \"unknown\") + (if (.tool_call.shellToolCall.args.command // \"\") != \"\" then \": \" + .tool_call.shellToolCall.args.command else \"\" end)] | unique | .[]" "${RAW}" 2>/dev/null || true)"
+      PARTIAL_NOTE="Agent output ended before the final result (exit ${EXIT_CODE}). Showing partial progress."
+    fi
+  else
+    STATUS="malformed"
+    # Fall back to last ~50 lines of stderr so the user can diagnose.
+    if [[ -f "${ERR}" ]]; then
+      RAW_ERROR="$(tail -n 50 "${ERR}" 2>/dev/null || true)"
     fi
   fi
-
-  RAW_ERROR="$(jq -r '.error // empty' "${RAW}" 2>/dev/null || true)"
 else
-  STATUS="malformed"
+  # Empty/missing raw output. Preserve dispatch's status (e.g. timed_out);
+  # only mark malformed when dispatch itself reported a non-terminal status.
+  if [[ "${META_STATUS}" != "timed_out" && "${META_STATUS}" != "failed" && "${META_STATUS}" != "cancelled" ]]; then
+    STATUS="malformed"
+  fi
   # Fall back to last ~50 lines of stderr so the user can diagnose.
   if [[ -f "${ERR}" ]]; then
     RAW_ERROR="$(tail -n 50 "${ERR}" 2>/dev/null || true)"
+  fi
+fi
+
+# Truncate to first ~1500 chars; if we trim, append last 300 chars as TAIL.
+# ${#var} is char-based; fine for our budget.
+if [[ -n "${FULL_RESULT}" ]]; then
+  FULL_LEN=${#FULL_RESULT}
+  if (( FULL_LEN > 1500 )); then
+    HEAD_PART="${FULL_RESULT:0:1500}"
+    TAIL_PART="${FULL_RESULT: -300}"
+    RESULT_TEXT=$'\n'"${HEAD_PART}"$'\n\n...[truncated; len='"${FULL_LEN}"']...\n\n[TAIL]\n'"${TAIL_PART}"
+  else
+    RESULT_TEXT=$'\n'"${FULL_RESULT}"
   fi
 fi
 
@@ -109,19 +158,27 @@ SUMMARY_ABS="${OUT_DIR_ABS}/${JOB_ID}.summary.md"
   printf '\n'
 
   printf '## Summary\n\n'
+  if [[ -n "${PARTIAL_NOTE}" ]]; then
+    printf '> %s\n\n' "${PARTIAL_NOTE}"
+  fi
   if [[ -n "${RESULT_TEXT}" ]]; then
+    if [[ -n "${PARTIAL_NOTE}" ]]; then
+      printf '### Partial result (incomplete)\n'
+    fi
     printf '%s\n' "${RESULT_TEXT}"
   else
     printf '_No result text extracted._\n'
     if [[ "${STATUS}" == "malformed" ]]; then
-      printf '\n> Raw Cursor JSON was missing or unparseable. See .err tail below.\n'
+      printf '\n> Raw Cursor output was missing or unparseable. See .err tail below.\n'
+    elif [[ "${STATUS}" == "timed_out" ]]; then
+      printf '\n> Agent hit the 590s timeout before producing output. See tool activity below.\n'
     fi
   fi
   printf '\n'
 
-  if [[ -n "${RAW_ERROR}" ]]; then
-    printf '## Errors\n\n'
-    printf '```\n%s\n```\n\n' "${RAW_ERROR}"
+  if [[ -n "${TOOL_SUMMARY}" ]]; then
+    printf '### Tool activity before cutoff\n\n'
+    printf '```\n%s\n```\n\n' "${TOOL_SUMMARY}"
   fi
 
   printf '## Artifacts\n\n'

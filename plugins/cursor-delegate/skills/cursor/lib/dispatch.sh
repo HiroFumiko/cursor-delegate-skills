@@ -274,7 +274,7 @@ fi
 # Build agent arg array.
 # ------------------------------------------------------------------------------
 
-AGENT_ARGS=(-p --model "${MODEL}" --output-format json --trust --sandbox "${SANDBOX}")
+AGENT_ARGS=(-p --model "${MODEL}" --output-format stream-json --trust --sandbox "${SANDBOX}")
 
 if [[ -n "${MODE}" && "${MODE}" != "null" ]]; then
   AGENT_ARGS+=(--mode "${MODE}")
@@ -490,10 +490,12 @@ COMPLETED_AT="$(cd_iso_now)"
 COMPLETED_MS="$(cd_epoch_ms)"
 DURATION_MS=$((COMPLETED_MS - STARTED_MS))
 
-# Pull session_id out of raw JSON if present/valid (best-effort).
+# Pull session_id out of raw output if present (best-effort). NOTE: `jq -R -s`
+# slurps the whole file into ONE string — per-line stream-json events must be
+# split before fromjson (see summarize.sh JQ_LINES).
 SESSION_ID=""
-if jq -e . "${RAW_JSON}" >/dev/null 2>&1; then
-  SESSION_ID="$(jq -r '.session_id // .chatId // empty' "${RAW_JSON}" 2>/dev/null || true)"
+if [[ -s "${RAW_JSON}" ]]; then
+  SESSION_ID="$(jq -R -s -r '[split("\n")[] | select(length > 0) | fromjson? // empty | .session_id // .chatId // empty] | map(select(length > 0)) | last // empty' "${RAW_JSON}" 2>/dev/null || true)"
 fi
 [[ -n "${RESUME_CHAT_ID}" && -z "${SESSION_ID}" ]] && SESSION_ID="${RESUME_CHAT_ID}"
 

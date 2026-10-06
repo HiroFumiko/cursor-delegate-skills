@@ -515,7 +515,7 @@ Cursor の worktree は `~/.cursor/worktrees/<repo>/impl-*/` に作られ、
 プロジェクト相対の成果物:
 
 ```
-<cwd>/.cursor/delegate/<JOB_ID>.json          — Cursor 生 JSON(監査用)
+<cwd>/.cursor/delegate/<JOB_ID>.json          — Cursor 生 stream-json(監査用; 1 行 1 イベント)
 <cwd>/.cursor/delegate/<JOB_ID>.err           — stderr ログ(監査用)
 <cwd>/.cursor/delegate/<JOB_ID>.summary.md    — Claude が読むサマリ
 <cwd>/.cursor/delegate/<JOB_ID>.meta.json     — sidecar(task/model/pid/timestamps/...)
@@ -572,7 +572,11 @@ state:
    (約 128KB 超で agent が SIGKILL されるため)。
 5. **exit 124 は永続** — タイムアウト時のリトライ禁止(3 × 590s ≈ 30 分の
 
-   ゾンビループを防ぐため)。
+   ゾンビループを防ぐため)。タイムアウトは `status: timed_out` を維持し
+
+   (`malformed` にしない)、打ち切り時点までの部分 `assistant` テキスト+
+
+   ツール実行状況をサマリに出す。
 6. **コンテキスト衛生** — Claude が読むのは `.summary.md` のみ、生 `.json`
 
    は監査用途のみ。
@@ -732,6 +736,14 @@ Phase 4 検証項目(A1, V1–V12, F6–F8)は 2026-04-28 時点で全件解決�
 置き換えるだけです(どちらの経路を取ったかはログに出ます)。
 
 ### 上流 / 環境依存の注意
+
+- タイムアウト(exit 124)は `status: timed_out` で、打ち切り時点までの
+
+  部分 `assistant` テキスト+ツール実行状況が残る(完全な結果ではない)。
+
+  タイムアウトを減らすには:プロンプトを絞り(プロンプトに埋め込み済みの
+
+  ファイルを agent に再読込させない)、大きな review は `fanout` で分割する。
 
 - `hooks.json` の headless 起動挙動は **未検証** のため、スキルは既定で
 

@@ -5,7 +5,12 @@
 #   1. YAML-ish frontmatter has all required fields sourced from meta.json
 #   2. ## Summary section contains (truncated) result text
 #   3. ## Artifacts section has absolute paths
-#   4. Malformed JSON case -> status: malformed in frontmatter
+#   4. Malformed JSONL case -> status: malformed in frontmatter
+#   5. stream-json completed run -> result text from trailing type==result line
+#   6. stream-json truncated run (no result line, meta timed_out) ->
+#      status stays timed_out + partial assistant text + tool activity
+#   7. stream-json truncated run with empty output, meta timed_out ->
+#      status stays timed_out (never malformed)
 #
 # Requires: jq
 # Exit 0 = PASS, non-zero = FAIL
@@ -223,7 +228,137 @@ else
   fail "malformed JSON: summary file created" "file missing: ${SUMMARY_BAD}"
 fi
 
-# ---- Helper: cd_rand may not be available outside a sourced lib_common ------
+# ---- Test 6: stream-json completed run -> result line wins -------------------
+
+JOB_SJ="test-sum-sj-ok"
+META_SJ="${OUT_DIR}/${JOB_SJ}.meta.json"
+RAW_SJ="${OUT_DIR}/${JOB_SJ}.json"
+ERR_SJ="${OUT_DIR}/${JOB_SJ}.err"
+SUMMARY_SJ="${OUT_DIR}/${JOB_SJ}.summary.md"
+
+jq -n \
+  --arg job_id "${JOB_SJ}" \
+  '{
+    job_id:         $job_id,
+    task_type:      "review",
+    resolved_model: "auto",
+    mode:           "ask",
+    worktree:       "none",
+    session_id:     "sess-stream-ok",
+    pid:            42,
+    started_at:     "2026-04-24T06:00:00.000Z",
+    completed_at:   "2026-04-24T06:00:03.000Z",
+    duration_ms:    3000,
+    exit_code:      0,
+    status:         "completed"
+  }' >"${META_SJ}"
+
+# assistant chatter + tool call + trailing result line (real stream-json shape).
+cat >"${RAW_SJ}" <<'EOF'
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PARTIAL-CHATTER-IGNORED"}]},"session_id":"sess-stream-ok"}
+{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"shellToolCall":{"args":{"command":"rg foo src"}}},"session_id":"sess-stream-ok"}
+{"type":"result","subtype":"success","is_error":false,"result":"FINAL-RESULT-TEXT","session_id":"sess-stream-ok"}
+EOF
+: >"${ERR_SJ}"
+
+bash "${SUMMARIZE_SH}" "${JOB_SJ}" >/dev/null 2>/dev/null || true
+
+if grep -q 'FINAL-RESULT-TEXT' "${SUMMARY_SJ}" \
+  && ! grep -q 'PARTIAL-CHATTER-IGNORED' "${SUMMARY_SJ}" \
+  && grep -q '^status: completed$' "${SUMMARY_SJ}"; then
+  pass "stream-json completed: result text from result line, status kept"
+else
+  fail "stream-json completed" "$(head -20 "${SUMMARY_SJ}" 2>/dev/null)"
+fi
+
+# ---- Test 7: truncated stream (no result line), meta timed_out ---------------
+
+JOB_TO="test-sum-sj-timeout"
+META_TO="${OUT_DIR}/${JOB_TO}.meta.json"
+RAW_TO="${OUT_DIR}/${JOB_TO}.json"
+ERR_TO="${OUT_DIR}/${JOB_TO}.err"
+SUMMARY_TO="${OUT_DIR}/${JOB_TO}.summary.md"
+
+jq -n \
+  --arg job_id "${JOB_TO}" \
+  '{
+    job_id:         $job_id,
+    task_type:      "review",
+    resolved_model: "auto",
+    mode:           "ask",
+    worktree:       "none",
+    session_id:     "sess-stream-partial",
+    pid:            42,
+    started_at:     "2026-04-24T06:00:00.000Z",
+    completed_at:   "2026-04-24T06:09:50.000Z",
+    duration_ms:    590000,
+    exit_code:      124,
+    status:         "timed_out"
+  }' >"${META_TO}"
+
+# No result line: only assistant progress + tool calls before the cutoff.
+cat >"${RAW_TO}" <<'EOF'
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PARTIAL-PROGRESS-ALPHA"}]},"session_id":"sess-stream-partial"}
+{"type":"tool_call","subtype":"started","call_id":"c2","tool_call":{"shellToolCall":{"args":{"command":"rg bar src"}}},"session_id":"sess-stream-partial"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"PARTIAL-PROGRESS-BETA"}]},"session_id":"sess-stream-partial"}
+EOF
+: >"${ERR_TO}"
+
+bash "${SUMMARIZE_SH}" "${JOB_TO}" >/dev/null 2>/dev/null || true
+
+if grep -q '^status: timed_out$' "${SUMMARY_TO}"; then
+  pass "truncated stream: status stays timed_out (not malformed)"
+else
+  fail "truncated stream status" "$(grep '^status:' "${SUMMARY_TO}" 2>/dev/null)"
+fi
+
+if grep -q 'PARTIAL-PROGRESS-ALPHA' "${SUMMARY_TO}" \
+  && grep -q 'PARTIAL-PROGRESS-BETA' "${SUMMARY_TO}" \
+  && grep -q 'Partial result (incomplete)' "${SUMMARY_TO}"; then
+  pass "truncated stream: partial assistant text rendered"
+else
+  fail "truncated stream partial text" "$(grep -A3 '## Summary' "${SUMMARY_TO}" 2>/dev/null | head -10)"
+fi
+
+if grep -q 'rg bar src' "${SUMMARY_TO}" \
+  && grep -q 'Tool activity before cutoff' "${SUMMARY_TO}"; then
+  pass "truncated stream: tool activity listed"
+else
+  fail "truncated stream tool activity" "$(grep -A5 'Tool activity' "${SUMMARY_TO}" 2>/dev/null | head -8)"
+fi
+
+# ---- Test 8: empty raw output, meta timed_out -> stays timed_out ------------
+
+JOB_TE="test-sum-empty-timeout"
+META_TE="${OUT_DIR}/${JOB_TE}.meta.json"
+RAW_TE="${OUT_DIR}/${JOB_TE}.json"
+SUMMARY_TE="${OUT_DIR}/${JOB_TE}.summary.md"
+
+jq -n \
+  --arg job_id "${JOB_TE}" \
+  '{
+    job_id:         $job_id,
+    task_type:      "review",
+    resolved_model: "auto",
+    mode:           "ask",
+    worktree:       "none",
+    session_id:     null,
+    pid:            42,
+    started_at:     "2026-04-24T06:00:00.000Z",
+    completed_at:   "2026-04-24T06:09:50.000Z",
+    duration_ms:    590000,
+    exit_code:      124,
+    status:         "timed_out"
+  }' >"${META_TE}"
+: >"${RAW_TE}"
+
+bash "${SUMMARIZE_SH}" "${JOB_TE}" >/dev/null 2>/dev/null || true
+
+if grep -q '^status: timed_out$' "${SUMMARY_TE}"; then
+  pass "empty output + timed_out meta: status stays timed_out"
+else
+  fail "empty output timed_out status" "$(grep '^status:' "${SUMMARY_TE}" 2>/dev/null)"
+fi
 # We sourced lib_common earlier indirectly via SUMMARIZE_SH's subprocess;
 # define a fallback here for our own use above.
 cd_rand() { tr -dc 'a-f0-9' </dev/urandom 2>/dev/null | head -c "${1:-8}"; }

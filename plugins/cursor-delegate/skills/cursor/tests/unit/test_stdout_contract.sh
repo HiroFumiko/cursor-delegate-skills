@@ -66,8 +66,8 @@ if [[ "${1:-}" == "--list-models" ]]; then
   printf 'good-model\ncomposer-2\n'
   exit 0
 fi
-# Emit fake JSON result.
-printf '{"result":"fake review result","session_id":"chat-test-123","duration_ms":100,"exit_code":0}\n'
+# Emit fake stream-json result (type=="result" line).
+printf '{"type":"result","subtype":"success","is_error":false,"result":"fake review result","session_id":"chat-test-123","duration_ms":100}\n'
 exit 0
 STUB
 chmod +x "${FAKE_BIN}/agent"
