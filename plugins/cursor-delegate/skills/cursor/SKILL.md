@@ -125,7 +125,7 @@ Internal callers (fanout synthesis, `Skill("cursor", ...)`) key off the
 
 ```
 .cursor/delegate/
-├── <JOB_ID>.json          # raw Cursor --output-format json (audit only)
+├── <JOB_ID>.json          # raw Cursor --output-format stream-json (audit only; 1 event/line, trailing type==result)
 ├── <JOB_ID>.err           # stderr capture
 ├── <JOB_ID>.meta.json     # dispatch sidecar (task_type, model, timestamps, pid, exit)
 └── <JOB_ID>.summary.md    # 1-page summary — the only file Claude Reads
@@ -145,7 +145,9 @@ Internal callers (fanout synthesis, `Skill("cursor", ...)`) key off the
    stdin (`<<<"${FULL_PROMPT}"`, EOF-terminated so no interactive hang).
    argv prompt is forbidden — agent SIGKILLs (exit 137) past ~128KB argv.
 5. Exit code **124 is PERMANENT** — never retried. Retrying a 590s timeout
-   would compound into a ~30-minute zombie loop.
+   would compound into a ~30-minute zombie loop. Timeout keeps
+   `status: timed_out` (never `malformed`): summarize renders the partial
+   `assistant` text + tool activity observed before the cutoff.
 6. The raw `.json` is an **audit artifact**. Claude Reads only `.summary.md`.
 
 ## Pre-flight checks (spec C7)
