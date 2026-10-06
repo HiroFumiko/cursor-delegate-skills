@@ -604,9 +604,13 @@ These contracts are enforced in code and in `tests/unit/`:
 3. **Implement worktree** — `implement` task type **always** gets
 
    `--worktree impl-<8hex>`. No opt-out in v1.
-4. **Agent invocation** — every `agent` call uses `</dev/null` for stdin and
+4. **Agent invocation** — every `agent` call takes the prompt on stdin
 
-   is wrapped in `timeout --kill-after=5s 590s`.
+   (`<<<"${FULL_PROMPT}"`, EOF-terminated so no interactive hang) and
+
+   is wrapped in `timeout --kill-after=5s 590s`. argv prompt is forbidden
+
+   (agent SIGKILLs past ~128KB argv).
 5. **Exit 124 = PERMANENT** — retry-on-timeout is forbidden (3 × 590 s ≈ 30
 
    min zombie loop otherwise).

@@ -6,11 +6,10 @@
 # Or use install_fake_agent from tests/fixtures/lib.sh.
 #
 # Env controls:
-#   FAKE_AGENT_MODELS   newline-separated model list (default: composer-2\ngood-model\ngpt-5.4-high)
-#   FAKE_AGENT_RESULT   JSON string emitted on non-list-models invocation
-#   FAKE_AGENT_SLEEP    seconds to sleep before emitting result (default: 0)
-#   FAKE_AGENT_EXIT     exit code (default: 0)
 #   FAKE_AGENT_RECORD   if set to a file path, append "$@" as one line
+#   FAKE_AGENT_STDIN_RECORD  if set to a file path, stdin is captured there
+#     (real invocation only — the --list-models preflight exits before this
+#     point, so preflight never consumes dispatch's own stdin).
 
 if [[ -n "${FAKE_AGENT_RECORD:-}" ]]; then
   printf '%s\n' "$*" >>"${FAKE_AGENT_RECORD}"
@@ -26,6 +25,10 @@ case "${1:-}" in
     exit 0
     ;;
 esac
+# Capture piped prompt stdin (real invocation only — preflight exits above).
+if [[ -n "${FAKE_AGENT_STDIN_RECORD:-}" ]] && [[ ! -t 0 ]]; then
+  cat >"${FAKE_AGENT_STDIN_RECORD}"
+fi
 
 if [[ "${FAKE_AGENT_SLEEP:-0}" != "0" ]]; then
   sleep "${FAKE_AGENT_SLEEP}"

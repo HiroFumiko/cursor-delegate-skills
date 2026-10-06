@@ -141,9 +141,9 @@ Internal callers (fanout synthesis, `Skill("cursor", ...)`) key off the
    filepath, everything else goes to stderr.
 2. `resolved-config-<JOB_ID>.json` path — never a shared well-known name.
 3. `implement` **always** appends `--worktree impl-<short-id>`. No opt-out in v1.
-4. Every `agent` invocation runs under `timeout 590s agent ... </dev/null` — the
-   600s Bash tool ceiling is the hard budget; stdin is explicitly closed to
-   rule out interactive prompt hangs.
+4. Every `agent` invocation runs under `timeout 590s` with the prompt on
+   stdin (`<<<"${FULL_PROMPT}"`, EOF-terminated so no interactive hang).
+   argv prompt is forbidden — agent SIGKILLs (exit 137) past ~128KB argv.
 5. Exit code **124 is PERMANENT** — never retried. Retrying a 590s timeout
    would compound into a ~30-minute zombie loop.
 6. The raw `.json` is an **audit artifact**. Claude Reads only `.summary.md`.
@@ -239,7 +239,7 @@ exit_code: 0
 ---
 
 ## Dry run
-### Planned command       # full `agent` argv (prompt elided to byte-length)
+### Planned command       # `agent` argv + `<prompt via stdin: N bytes>`
 ### Resolved config       # task defaults from the per-JOB snapshot
 ## Artifacts              # path to meta sidecar
 ```

@@ -8,14 +8,10 @@
 #   - a preamble WITHOUT a placeholder is prepended (user prompt still present)
 #   - no preamble -> user prompt passed verbatim (backward compatible)
 #
-# Two observation channels:
-#   A. --dry-run + CURSOR_DELEGATE_DEBUG_PROMPT=1 renders the COMPOSED prompt
-#      into the summary's "Final prompt preview" fenced block (no real agent run).
-#      NB: the dry-run summary ALSO dumps the resolved config (which contains the
-#      raw preamble + the literal {{prompt}}), so assertions are scoped to the
-#      preview block only — never grep the whole summary file.
-#   B. a real (non-dry) run: the fake-agent records `$*`; we assert the composed
-#      prompt actually reaches the `agent -- <prompt>` argv.
+#   B. a real (non-dry) run: the fake-agent captures stdin
+#      (FAKE_AGENT_STDIN_RECORD) and records argv (FAKE_AGENT_RECORD); we
+#      assert the composed prompt arrives on stdin and NOT on argv (argv
+#      prompt SIGKILLs agent past ~128KB — see dispatch.sh).
 #
 # Requires: jq. Exit 0 = PASS, non-zero = FAIL, 77 = SKIP.
 
@@ -160,15 +156,17 @@ else
 fi
 
 # =============================================================================
-# B — real invocation passes the composed prompt to `agent -- <prompt>`
+# B — real invocation passes the composed prompt via stdin, not argv
 # =============================================================================
 
 REC="${TMPDIR_TEST}/agent-calls.txt"
+STDIN_REC="${TMPDIR_TEST}/agent-stdin.txt"
 : >"${REC}"
 set +e
 env "${COMMON_ENV[@]}" \
   CURSOR_DELEGATE_QUARANTINE_HOOKS="0" \
   FAKE_AGENT_RECORD="${REC}" \
+  FAKE_AGENT_STDIN_RECORD="${STDIN_REC}" \
   bash "${DISPATCH_SH}" review "USERTEXT-DELTA" >/dev/null 2>&1
 B_EXIT=$?
 set -e
@@ -179,15 +177,23 @@ else
   fail "review real exit" "got ${B_EXIT}"
 fi
 
-# The fake-agent records `$*`. The composed prompt carries embedded newlines, so
-# the multi-line argv spans several physical lines in the record file; assert on
-# the file as a whole. It contains only agent calls (a `--list-models` preflight
-# line + the real `-p …` invocation), so ROLE-/USERTEXT- markers can come only
-# from the composed prompt that reached the `agent -- <prompt>` argv.
+# The composed prompt (preamble + user text) must arrive on stdin.
+if [[ -f "${STDIN_REC}" ]] \
+  && grep -q 'ROLE-REVIEWER-LINE1' "${STDIN_REC}" \
+  && grep -q 'USERTEXT-DELTA' "${STDIN_REC}"; then
+  pass "review (real): composed prompt (preamble + user text) reached agent stdin"
+else
+  fail "review real stdin" "stdin record: $(cat "${STDIN_REC}" 2>/dev/null)"
+fi
+
+# ... and must NOT ride on argv (SIGKILL past ~128KB). The argv record holds
+# only agent calls (a `--list-models` preflight line + the real `-p …`
+# invocation), so ROLE-/USERTEXT- markers there can only come from an argv
+# prompt.
 if grep -q -- '-p' "${REC}" \
-   && grep -q 'ROLE-REVIEWER-LINE1' "${REC}" \
-   && grep -q 'USERTEXT-DELTA' "${REC}"; then
-  pass "review (real): composed prompt (preamble + user text) reached agent -- argv"
+  && ! grep -q 'ROLE-REVIEWER-LINE1' "${REC}" \
+  && ! grep -q 'USERTEXT-DELTA' "${REC}"; then
+  pass "review (real): prompt absent from argv (stdin-only delivery)"
 else
   fail "review real argv" "record: $(cat "${REC}" 2>/dev/null)"
 fi

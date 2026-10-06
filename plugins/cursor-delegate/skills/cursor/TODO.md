@@ -143,9 +143,9 @@ and plan keep none.
 | Scope | Change |
 |-------|--------|
 | `config/.cursor.json` | review/investigate/security gained array `preamble`s ending in `{{prompt}}`. |
-| `lib/dispatch.sh` | new `FULL_PROMPT` jq-compose block after MODEL resolve; `agent … -- "${FULL_PROMPT}"`; dry-run preview/byte-count + heading now reflect the composed prompt. |
+| `lib/dispatch.sh` | new `FULL_PROMPT` jq-compose block after MODEL resolve; prompt via stdin (`<<<"${FULL_PROMPT}"` — argv prompt SIGKILLs agent past ~128KB); dry-run preview/byte-count + heading now reflect the composed prompt. |
 | `config/schema.json` | `taskRoute.preamble` = `oneOf[string, array<string>]` (+ description). |
-| `tests/unit/test_preamble_injection.sh` | NEW — array-join + `{{prompt}}` substitution + placeholder-consumed + no-placeholder-prepend + verbatim-when-absent (via `--dry-run`/`CURSOR_DELEGATE_DEBUG_PROMPT=1` preview block) **and** the real `agent -- <prompt>` argv (fake-agent record). |
+| `tests/unit/test_preamble_injection.sh` | NEW — array-join + `{{prompt}}` substitution + placeholder-consumed + no-placeholder-prepend + verbatim-when-absent (via `--dry-run`/`CURSOR_DELEGATE_DEBUG_PROMPT=1` preview block) **and** the real stdin-delivered prompt (fake-agent `FAKE_AGENT_STDIN_RECORD` + argv-absence check). |
 | docs | `SKILL.md` routing matrix (+preamble column & note), `README.md` / `README_ja.md` "Per-task prompt" section. |
 
 **Verification (2026-06-27)**: full unit suite **17 PASS / 0 FAIL / 0 SKIP**

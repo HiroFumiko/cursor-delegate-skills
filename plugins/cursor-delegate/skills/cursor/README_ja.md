@@ -563,9 +563,13 @@ state:
 3. **implement の worktree** — `implement` は **常に**
 
    `--worktree impl-<8hex>` を付ける。v1 では opt-out 不可。
-4. **agent 呼び出し** — 全 `agent` 呼び出しは `</dev/null` で stdin を閉じ、
+4. **agent 呼び出し** — 全 `agent` 呼び出しはプロンプトを stdin
 
-   `timeout --kill-after=5s 590s` で包む。
+   (`<<<"${FULL_PROMPT}"`、EOF 終端のため対話待ちハングなし)で渡し、
+
+   `timeout --kill-after=5s 590s` で包む。argv 渡しは禁止
+
+   (約 128KB 超で agent が SIGKILL されるため)。
 5. **exit 124 は永続** — タイムアウト時のリトライ禁止(3 × 590s ≈ 30 分の
 
    ゾンビループを防ぐため)。

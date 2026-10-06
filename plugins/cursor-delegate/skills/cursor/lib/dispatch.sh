@@ -10,7 +10,9 @@
 #   - Everything else -> stderr.
 #
 # Invariants (do not drift):
-#   - stdin `</dev/null` + `timeout 590s` on every agent invocation.
+#   - prompt via stdin (`<<<"${FULL_PROMPT}"`, still EOF-terminated so no
+#     interactive hang) + `timeout 590s` on every agent invocation. argv
+#     prompt is forbidden: agent SIGKILLs (exit 137) past ~128KB argv.
 #   - implement ALWAYS gets --worktree impl-<short-id> (no opt-out in v1).
 #   - resolved-config snapshot is PER-JOB (resolved-config-<JOB_ID>.json).
 #   - Exit 124 is PERMANENT — no retry (cd_classify_exit enforces).
@@ -372,7 +374,7 @@ if cd_is_dry_run; then
     for a in "${AGENT_ARGS[@]}"; do
       printf ' \\\n    %q' "${a}"
     done
-    printf ' \\\n    -- <prompt: %s bytes>\n' "${#FULL_PROMPT}"
+    printf ' \\\n    <prompt via stdin: %s bytes>\n' "${#FULL_PROMPT}"
     printf '```\n\n'
     if [[ -n "${PROMPT_PREVIEW}" ]]; then
       printf '### Final prompt preview — preamble + user prompt (CURSOR_DELEGATE_DEBUG_PROMPT=1)\n\n'
@@ -418,9 +420,12 @@ while : ; do
   # V1 fix: background the timeout wrapper so we can capture the real child PID
   # (timeout(1) forwards SIGTERM/SIGKILL to its agent child), persist it to meta
   # BEFORE waiting so cancel.sh / status.sh can act on a live pid, then wait.
+  # Prompt goes via stdin, not argv: agent is SIGKILLed (exit 137, empty
+  # stderr) when a single argv prompt exceeds ~128KB. stdin still hits EOF,
+  # so there is no interactive-hang risk.
   "${CD_TIMEOUT_BIN:-timeout}" --kill-after=5s "${TIMEOUT_SEC}s" \
-    agent "${AGENT_ARGS[@]}" -- "${FULL_PROMPT}" \
-    </dev/null >"${RAW_JSON}" 2>"${RAW_ERR}" &
+    agent "${AGENT_ARGS[@]}" \
+    <<<"${FULL_PROMPT}" >"${RAW_JSON}" 2>"${RAW_ERR}" &
   CHILD_PID=$!
 
   # Persist the live child PID before blocking on wait. cancel.sh sends SIGTERM
