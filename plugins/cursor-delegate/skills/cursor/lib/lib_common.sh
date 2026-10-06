@@ -24,7 +24,7 @@
 #   cd_emit_meta ...          — initial .meta.json sidecar
 #   cd_update_meta JOB JQ     — in-place jq edit on meta sidecar
 #
-# Invariant: every `agent` invocation is stdin </dev/null + `timeout 590s`.
+# Invariant: every `agent` invocation is prompt-via-stdin + `timeout 590s`.
 # Invariant: resolved-config snapshot path is PER-JOB_ID (never shared).
 
 set -euo pipefail
